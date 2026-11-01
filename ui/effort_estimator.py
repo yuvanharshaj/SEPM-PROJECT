@@ -1,8 +1,9 @@
-"""Effort & Size Estimator UI (Basic COCOMO & Albrecht Function Points)."""
+"""Effort & Size Estimator UI: Basic COCOMO, Albrecht FPA, COSMIC FFP, and PERT."""
 
 import streamlit as st
 import pandas as pd
 import plotly.express as px
+import plotly.graph_objects as go
 
 from core.cocomo import calculate_cocomo, COCOMO_COEFFICIENTS
 from core.function_points import (
@@ -11,6 +12,8 @@ from core.function_points import (
     GENERAL_SYSTEM_CHARACTERISTICS,
     LANGUAGE_LOC_FACTORS,
 )
+from core.cosmic import calculate_cosmic_ffp
+from core.pert import calculate_pert
 from ui.components import render_page_header
 from db.database import DatabaseManager
 
@@ -18,9 +21,9 @@ from db.database import DatabaseManager
 def render_effort_estimator_page():
     render_page_header(
         title="Software Effort & Size Estimator",
-        subtitle="Empirical cost estimation via Boehm's Basic COCOMO and Albrecht's Function Point Analysis (FPA).",
-        module_tag="VTU 24CS51: Module 3 (Cost Estimation & Metrics)",
-        co_tag="CO3: Apply Algorithmic Models to Predict Project Effort, Time & Size",
+        subtitle="Decomposition and empirical estimation: Boehm's COCOMO, Albrecht FPA, COSMIC FFP, and PERT three-point analysis.",
+        module_tag="VTU 24CS51: Module 4 & 5 (Cost & Effort Estimation)",
+        co_tag="CO4: Apply Algorithmic & Decomposition Techniques to Predict Effort and Schedule",
     )
 
     active = st.session_state.get("current_project")
@@ -30,7 +33,12 @@ def render_effort_estimator_page():
 
     db: DatabaseManager = st.session_state.db
 
-    tab_cocomo, tab_fp = st.tabs(["📐 (a) Basic COCOMO Model", "🔢 (b) Function Point Analysis (FPA)"])
+    tab_cocomo, tab_fp, tab_cosmic, tab_pert = st.tabs([
+        "📐 (a) Basic COCOMO Model",
+        "🔢 (b) Function Point Analysis (FPA)",
+        "🌌 (c) COSMIC Full Function Points",
+        "🎯 (d) Bottom-Up / PERT Three-Point",
+    ])
 
     # -------------------------------------------------------------
     # TAB A: BASIC COCOMO
@@ -63,7 +71,6 @@ def render_effort_estimator_page():
                 help="1 KLOC = 1,000 physical source lines of code",
             )
 
-        # Coefficient card
         coeff = COCOMO_COEFFICIENTS[selected_mode]
         st.caption(
             f"**Active Empirical Constants ({selected_mode.title()}):** "
@@ -72,7 +79,6 @@ def render_effort_estimator_page():
 
         cocomo_res = calculate_cocomo(input_kloc, selected_mode)
 
-        # Metric Cards
         m1, m2, m3, m4 = st.columns(4)
         with m1:
             st.metric("Required Effort", f"{cocomo_res.effort_pm:.1f} PM", help="Person-Months of labor")
@@ -83,7 +89,6 @@ def render_effort_estimator_page():
         with m4:
             st.metric("Productivity", f"{cocomo_res.productivity_loc_pm:.0f} LOC/PM", help="Lines of code delivered per person-month")
 
-        # Multi-mode sensitivity graph
         st.markdown("#### 📈 Multi-Mode Comparative Sensitivity")
         kloc_range = [max(1.0, input_kloc * f) for f in [0.5, 0.75, 1.0, 1.25, 1.5, 2.0]]
         comparison_records = []
@@ -179,10 +184,8 @@ def render_effort_estimator_page():
                 )
                 gsc_ratings.append(val)
 
-        # Compute FP
         fp_result = calculate_function_points(comp_inputs, gsc_ratings)
 
-        # Display FP Results
         f1, f2, f3, f4 = st.columns(4)
         with f1:
             st.metric("Unadjusted FP (UFP)", f"{fp_result.ufp:.0f}")
@@ -195,8 +198,6 @@ def render_effort_estimator_page():
 
         st.markdown("---")
         st.markdown("#### 3. Language Gear Factors & Equivalent Sizing (FP ➡️ KLOC)")
-        st.caption("Industry benchmark LOC/FP ratios for software sizing:")
-
         df_lang = pd.DataFrame([
             {
                 "Language": lang,
@@ -226,3 +227,215 @@ def render_effort_estimator_page():
                 st.success(f"Updated Project KLOC to {target_kloc:.2f} KLOC and saved FPA configuration!")
                 st.rerun()
 
+    # -------------------------------------------------------------
+    # TAB C: COSMIC FULL FUNCTION POINTS (ISO/IEC 19761)
+    # -------------------------------------------------------------
+    with tab_cosmic:
+        st.markdown("### COSMIC Full Function Points (FFP - ISO/IEC 19761)")
+        st.markdown(
+            "COSMIC measures functional size by identifying distinct **data movements** across functional boundaries. "
+            "Each **Entry (E)**, **Exit (X)**, **Read (R)**, or **Write (W)** represents exactly **1 CFP**."
+        )
+        st.latex(r"\text{Process Size (CFP)} = E + X + R + W, \quad \text{Total Size} = \sum \text{CFP}_i")
+
+        # Session state for cosmic processes if not present
+        if "cosmic_processes" not in st.session_state:
+            st.session_state.cosmic_processes = [
+                {"process_id": "P-01", "name": "User Registration & KYC", "entries": 4, "exits": 3, "reads": 2, "writes": 2},
+                {"process_id": "P-02", "name": "Authentication & Token Issuance", "entries": 2, "exits": 2, "reads": 2, "writes": 1},
+                {"process_id": "P-03", "name": "Core Transaction Processing", "entries": 5, "exits": 4, "reads": 4, "writes": 3},
+                {"process_id": "P-04", "name": "Reporting & Analytics Export", "entries": 2, "exits": 5, "reads": 4, "writes": 0},
+            ]
+
+        col_c_cfg1, col_c_cfg2 = st.columns(2)
+        with col_c_cfg1:
+            prod_hours = st.slider(
+                "Productivity (Hours per CFP):",
+                min_value=4.0,
+                max_value=30.0,
+                value=12.0,
+                step=1.0,
+                help="Industry average: 8–16 hours per COSMIC Function Point",
+            )
+        with col_c_cfg2:
+            team_sz = int(active.get("team_size", 5))
+            st.caption(f"Active project team size: **{team_sz} engineers**")
+
+        cosmic_res = calculate_cosmic_ffp(
+            st.session_state.cosmic_processes,
+            productivity_hours_per_cfp=prod_hours,
+            team_size=team_sz,
+        )
+
+        # Metric KPI cards
+        cm1, cm2, cm3, cm4 = st.columns(4)
+        with cm1:
+            st.metric("Total COSMIC Size", f"{cosmic_res.total_cfp} CFP")
+        with cm2:
+            st.metric("Total Effort (Hours)", f"{cosmic_res.total_effort_hours:,.0f} Hours")
+        with cm3:
+            st.metric("Total Effort (PM)", f"{cosmic_res.total_effort_pm:.1f} PM", help="Person-Months (at 160 hrs/mo)")
+        with cm4:
+            st.metric("Estimated Schedule", f"{cosmic_res.estimated_duration_months:.1f} Months", f"With {team_sz} staff")
+
+        # Data Movement breakdown chart
+        col_c_tbl, col_c_chart = st.columns([1.4, 1.0])
+
+        with col_c_tbl:
+            st.markdown("#### 📋 Functional Processes Table")
+            df_cosmic = pd.DataFrame([p.to_dict() for p in cosmic_res.processes]).rename(columns={
+                "process_id": "ID",
+                "name": "Functional Process Name",
+                "entries": "Entries (E)",
+                "exits": "Exits (X)",
+                "reads": "Reads (R)",
+                "writes": "Writes (W)",
+                "cfp": "Total CFP",
+            })
+            st.dataframe(df_cosmic, use_container_width=True, hide_index=True)
+
+        with col_c_chart:
+            st.markdown("#### 📊 Movement Type Distribution")
+            df_movements = pd.DataFrame({
+                "Data Movement": ["Entries (E)", "Exits (X)", "Reads (R)", "Writes (W)"],
+                "Count (CFP)": [cosmic_res.total_entries, cosmic_res.total_exits, cosmic_res.total_reads, cosmic_res.total_writes],
+            })
+            fig_move = px.pie(
+                df_movements,
+                names="Data Movement",
+                values="Count (CFP)",
+                color_discrete_sequence=["#1976D2", "#388E3C", "#F57C00", "#7B1FA2"],
+                hole=0.4,
+            )
+            fig_move.update_layout(height=280, margin=dict(l=20, r=20, t=20, b=20))
+            st.plotly_chart(fig_move, use_container_width=True)
+
+        # Form to add a new process
+        with st.expander("➕ Add Functional Process to COSMIC Model"):
+            with st.form("add_cosmic_proc_form"):
+                cp_id = st.text_input("Process ID", value=f"P-{len(st.session_state.cosmic_processes)+1:02d}")
+                cp_name = st.text_input("Process Name", placeholder="e.g. Audit Log Dispatcher")
+                c_e, c_x, c_r, c_w = st.columns(4)
+                with c_e:
+                    val_e = st.number_input("Entries (E)", min_value=0, value=2)
+                with c_x:
+                    val_x = st.number_input("Exits (X)", min_value=0, value=2)
+                with c_r:
+                    val_r = st.number_input("Reads (R)", min_value=0, value=1)
+                with c_w:
+                    val_w = st.number_input("Writes (W)", min_value=0, value=1)
+
+                add_p_btn = st.form_submit_button("Add Process", type="primary")
+                if add_p_btn:
+                    if cp_name.strip():
+                        st.session_state.cosmic_processes.append({
+                            "process_id": cp_id,
+                            "name": cp_name.strip(),
+                            "entries": int(val_e),
+                            "exits": int(val_x),
+                            "reads": int(val_r),
+                            "writes": int(val_w),
+                        })
+                        st.success(f"Added process '{cp_name}'!")
+                        st.rerun()
+
+    # -------------------------------------------------------------
+    # TAB D: BOTTOM-UP / THREE-POINT (PERT)
+    # -------------------------------------------------------------
+    with tab_pert:
+        st.markdown("### Bottom-Up & Three-Point (PERT) Estimator")
+        st.markdown(
+            "Decomposes the project Work Breakdown Structure (WBS) into granular tasks. "
+            "For each task, estimates are provided across three scenarios to model a Beta probability distribution:"
+        )
+        st.latex(r"E_i = \frac{O_i + 4M_i + P_i}{6}, \quad SD_i = \frac{P_i - O_i}{6}, \quad V_i = SD_i^2")
+        st.latex(r"E_{\text{total}} = \sum E_i, \quad SD_{\text{total}} = \sqrt{\sum V_i}")
+
+        if "pert_tasks" not in st.session_state:
+            st.session_state.pert_tasks = [
+                {"task_id": "WBS-01", "name": "System Architecture & API Specs", "category": "Architecture", "optimistic": 20.0, "most_likely": 35.0, "pessimistic": 60.0},
+                {"task_id": "WBS-02", "name": "Frontend Responsive Dashboard", "category": "Frontend", "optimistic": 40.0, "most_likely": 65.0, "pessimistic": 110.0},
+                {"task_id": "WBS-03", "name": "Backend Microservices & DB Models", "category": "Backend", "optimistic": 60.0, "most_likely": 95.0, "pessimistic": 150.0},
+                {"task_id": "WBS-04", "name": "Security Hardening & OAuth Integration", "category": "Security", "optimistic": 15.0, "most_likely": 30.0, "pessimistic": 55.0},
+                {"task_id": "WBS-05", "name": "Integration & End-to-End Testing", "category": "QA / Testing", "optimistic": 25.0, "most_likely": 45.0, "pessimistic": 80.0},
+            ]
+
+        pert_res = calculate_pert(st.session_state.pert_tasks)
+
+        # KPI Metric cards
+        p1, p2, p3, p4 = st.columns(4)
+        with p1:
+            st.metric("Total Expected Effort", f"{pert_res.total_expected:.1f} Hours", f"{pert_res.total_expected / 160.0:.2f} PM")
+        with p2:
+            st.metric("Combined Std Dev", f"{pert_res.combined_sd:.2f} Hours", f"Variance: {pert_res.combined_variance:.1f}")
+        with p3:
+            st.metric("90% Confidence Range", f"{pert_res.confidence_90_range[0]:.0f} – {pert_res.confidence_90_range[1]:.0f} Hrs", "Z = 1.645")
+        with p4:
+            st.metric("Total Decomposed Tasks", f"{pert_res.total_tasks} Tasks")
+
+        # Confidence Table & Chart
+        col_p_tbl, col_p_chart = st.columns([1.4, 1.0])
+
+        with col_p_tbl:
+            st.markdown("#### 📋 WBS Task Estimates (Hours)")
+            df_pert = pd.DataFrame([t.to_dict() for t in pert_res.tasks]).rename(columns={
+                "task_id": "WBS ID",
+                "name": "Task Name",
+                "category": "Category",
+                "optimistic": "Opt (O)",
+                "most_likely": "Likely (M)",
+                "pessimistic": "Pess (P)",
+                "expected": "Expected (E)",
+                "standard_deviation": "SD",
+            })
+            st.dataframe(df_pert[["WBS ID", "Task Name", "Category", "Opt (O)", "Likely (M)", "Pess (P)", "Expected (E)", "SD"]], use_container_width=True, hide_index=True)
+
+        with col_p_chart:
+            st.markdown("#### 🎯 Statistical Confidence Intervals")
+            df_conf = pd.DataFrame([
+                {"Level": "68% (±1.00σ)", "Lower (Hrs)": f"{pert_res.confidence_68_range[0]:.1f}", "Upper (Hrs)": f"{pert_res.confidence_68_range[1]:.1f}"},
+                {"Level": "90% (±1.645σ)", "Lower (Hrs)": f"{pert_res.confidence_90_range[0]:.1f}", "Upper (Hrs)": f"{pert_res.confidence_90_range[1]:.1f}"},
+                {"Level": "95% (±1.96σ)", "Lower (Hrs)": f"{pert_res.confidence_95_range[0]:.1f}", "Upper (Hrs)": f"{pert_res.confidence_95_range[1]:.1f}"},
+            ])
+            st.dataframe(df_conf, use_container_width=True, hide_index=True)
+
+            if pert_res.category_breakdown:
+                fig_cat = px.bar(
+                    x=list(pert_res.category_breakdown.keys()),
+                    y=list(pert_res.category_breakdown.values()),
+                    labels={"x": "WBS Category", "y": "Expected Effort (Hours)"},
+                    title="Effort by WBS Category",
+                    color=list(pert_res.category_breakdown.keys()),
+                )
+                fig_cat.update_layout(height=240, margin=dict(l=10, r=10, t=30, b=10), showlegend=False)
+                st.plotly_chart(fig_cat, use_container_width=True)
+
+        # Form to add task
+        with st.expander("➕ Add WBS Task to PERT Estimator"):
+            with st.form("add_pert_task_form"):
+                pt_id = st.text_input("Task ID", value=f"WBS-{len(st.session_state.pert_tasks)+1:02d}")
+                pt_name = st.text_input("Task Name", placeholder="e.g. CI/CD Deployment Pipeline Setup")
+                pt_cat = st.selectbox("Category", ["Architecture", "Backend", "Frontend", "Security", "QA / Testing", "DevOps"])
+                co1, co2, co3 = st.columns(3)
+                with co1:
+                    po = st.number_input("Optimistic Hours (O)", min_value=1.0, value=10.0, step=2.0)
+                with co2:
+                    pm = st.number_input("Most Likely Hours (M)", min_value=1.0, value=20.0, step=2.0)
+                with co3:
+                    pp = st.number_input("Pessimistic Hours (P)", min_value=1.0, value=40.0, step=5.0)
+
+                add_task_btn = st.form_submit_button("Add Task", type="primary")
+                if add_task_btn:
+                    if po > pm or pm > pp:
+                        st.error("Estimates must satisfy: Optimistic <= Most Likely <= Pessimistic")
+                    elif pt_name.strip():
+                        st.session_state.pert_tasks.append({
+                            "task_id": pt_id,
+                            "name": pt_name.strip(),
+                            "category": pt_cat,
+                            "optimistic": float(po),
+                            "most_likely": float(pm),
+                            "pessimistic": float(pp),
+                        })
+                        st.success(f"Added task '{pt_name}' to PERT estimator!")
+                        st.rerun()
