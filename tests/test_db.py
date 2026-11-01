@@ -29,7 +29,7 @@ def test_db_get_project_details(temp_db):
     assert proj["team_size"] == 14
     assert len(proj["risks"]) == 4
     assert proj["fp_components"] is not None
-    assert proj["business_case"]["initial_investment"] == 85000.0
+    assert proj["business_case"]["initial_investment"] == 7000000.0
     assert "Correctness" in proj["quality_scores"]
 
 

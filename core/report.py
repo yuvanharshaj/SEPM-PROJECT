@@ -10,12 +10,16 @@ Syllabus Reference:
 
 import io
 import csv
+import pathlib
 from datetime import datetime
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
 
+import matplotlib
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import letter
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.pdfbase import pdfmetrics
+from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.platypus import (
     SimpleDocTemplate,
     Paragraph,
@@ -23,27 +27,86 @@ from reportlab.platypus import (
     Table,
     TableStyle,
     HRFlowable,
-    KeepTogether,
 )
 
+# Register Unicode TrueType fonts (DejaVu Sans) from Matplotlib if available
+FONT_NAME = "Helvetica"
+FONT_NAME_BOLD = "Helvetica-Bold"
+RUPEE_CHAR = "Rs."
 
-def generate_consolidated_csv(report_data: Dict[str, Any]) -> str:
+try:
+    font_dir = pathlib.Path(matplotlib.get_data_path()) / "fonts" / "ttf"
+    reg_font_file = font_dir / "DejaVuSans.ttf"
+    bold_font_file = font_dir / "DejaVuSans-Bold.ttf"
+    if reg_font_file.exists() and bold_font_file.exists():
+        pdfmetrics.registerFont(TTFont("DejaVuSans", str(reg_font_file)))
+        pdfmetrics.registerFont(TTFont("DejaVuSans-Bold", str(bold_font_file)))
+        FONT_NAME = "DejaVuSans"
+        FONT_NAME_BOLD = "DejaVuSans-Bold"
+        RUPEE_CHAR = "₹"
+except Exception:
+    FONT_NAME = "Helvetica"
+    FONT_NAME_BOLD = "Helvetica-Bold"
+    RUPEE_CHAR = "Rs."
+
+
+def _format_pdf_currency(val: float, currency: str = "INR", precision: int = 0) -> str:
+    """Format currency values safely for PDF output using active font capabilities."""
+    if val is None:
+        return "N/A"
+    try:
+        fval = float(val)
+    except (ValueError, TypeError):
+        return str(val)
+
+    is_neg = fval < 0
+    an = abs(fval)
+
+    if currency == "INR":
+        sym = RUPEE_CHAR
+        # Indian comma grouping
+        s = str(int(round(an)))
+        if len(s) <= 3:
+            grouped = s
+        else:
+            last3 = s[-3:]
+            rest = s[:-3]
+            groups = []
+            while len(rest) > 2:
+                groups.insert(0, rest[-2:])
+                rest = rest[:-2]
+            if rest:
+                groups.insert(0, rest)
+            grouped = ",".join(groups) + "," + last3
+        formatted = f"{sym}{grouped}"
+    elif currency == "EUR":
+        formatted = f"€{an:,.{precision}f}"
+    else:  # USD
+        formatted = f"${an:,.{precision}f}"
+
+    return f"-{formatted}" if is_neg else formatted
+
+
+def generate_consolidated_csv(report_data: Dict[str, Any], currency: str = "INR") -> str:
     """Generate a clean consolidated CSV representation of the project analysis."""
     output = io.StringIO()
     writer = csv.writer(output)
+
+    sym = "₹" if currency == "INR" else ("€" if currency == "EUR" else "$")
 
     # 1. Project Overview
     proj = report_data.get("project", {})
     writer.writerow(["# ProcessCompass Project Evaluation Summary"])
     writer.writerow(["Generated At", datetime.now().strftime("%Y-%m-%d %H:%M:%S")])
     writer.writerow(["Syllabus Mapping", "VTU 24CS51 Software Engineering & Project Management"])
+    writer.writerow(["Currency", f"{currency} ({sym})"])
     writer.writerow([])
     writer.writerow(["--- 1. PROJECT SETUP & CONSTRAINTS (VTU MODULE 3) ---"])
     writer.writerow(["Project Name", proj.get("name", "N/A")])
     writer.writerow(["Description", proj.get("description", "N/A")])
     writer.writerow(["Team Size (Persons)", proj.get("team_size", 0)])
     writer.writerow(["Duration (Months)", proj.get("duration", 0)])
-    writer.writerow(["Budget (USD / INR)", proj.get("budget", 0)])
+    writer.writerow([f"Budget ({currency})", _format_pdf_currency(proj.get("budget", 0), currency=currency)])
     writer.writerow(["Requirement Stability", proj.get("req_stability", "Medium")])
     writer.writerow(["Customer Involvement", proj.get("customer_involvement", "Medium")])
     writer.writerow(["Risk Level", proj.get("risk_level", "Medium")])
@@ -105,16 +168,16 @@ def generate_consolidated_csv(report_data: Dict[str, Any]) -> str:
     risks = report_data.get("risks", {})
     writer.writerow(["--- 5. RISK REGISTER & RMMM PLAN (VTU MODULE 4) ---"])
     writer.writerow(["Total Risks", risks.get("total_risks", 0)])
-    writer.writerow(["Total Risk Exposure (Cost)", risks.get("total_exposure", 0.0)])
-    writer.writerow(["Risk ID", "Category", "Description", "Probability", "Impact Cost", "Exposure", "Severity", "Mitigation"])
+    writer.writerow([f"Total Risk Exposure ({sym})", _format_pdf_currency(risks.get("total_exposure", 0.0), currency=currency)])
+    writer.writerow(["Risk ID", "Category", "Description", "Probability", f"Impact Cost ({sym})", f"Exposure ({sym})", "Severity", "Mitigation"])
     for r in risks.get("ranked_risks", []):
         writer.writerow([
             r.get("id"),
             r.get("category"),
             r.get("description"),
             r.get("probability"),
-            r.get("impact_cost"),
-            r.get("exposure"),
+            _format_pdf_currency(r.get("impact_cost", 0), currency=currency),
+            _format_pdf_currency(r.get("exposure", 0), currency=currency),
             r.get("severity_level"),
             r.get("mitigation"),
         ])
@@ -126,19 +189,19 @@ def generate_consolidated_csv(report_data: Dict[str, Any]) -> str:
     radr = report_data.get("radr", {})
     writer.writerow(["--- 6. BUSINESS CASE & ECONOMIC FEASIBILITY (VTU MODULE 3) ---"])
     writer.writerow(["Metric", "Value"])
-    writer.writerow(["Initial Investment", biz.get("initial_investment", 0)])
+    writer.writerow([f"Initial Investment ({sym})", _format_pdf_currency(biz.get("initial_investment", 0), currency=currency)])
     writer.writerow(["Discount Rate (%)", biz.get("discount_rate_pct", 0)])
-    writer.writerow(["Net Present Value (NPV)", biz.get("npv", 0)])
+    writer.writerow([f"Net Present Value (NPV) ({sym})", _format_pdf_currency(biz.get("npv", 0), currency=currency)])
     writer.writerow(["Simple ROI (%)", biz.get("roi_pct", 0)])
     writer.writerow(["Payback Period (Years)", biz.get("payback_period_years", "N/A")])
     writer.writerow(["Financial Viability", "VIABLE" if biz.get("is_financially_viable") else "UNVIABLE"])
     if scenario:
-        writer.writerow(["Expected NPV (EMV)", scenario.get("expected_npv", "N/A")])
+        writer.writerow([f"Expected NPV (EMV) ({sym})", _format_pdf_currency(scenario.get("expected_npv", 0), currency=currency)])
         writer.writerow(["Expected ROI (%)", scenario.get("expected_roi_pct", "N/A")])
-        writer.writerow(["NPV Standard Deviation", scenario.get("npv_standard_deviation", "N/A")])
+        writer.writerow([f"NPV Standard Deviation ({sym})", _format_pdf_currency(scenario.get("npv_standard_deviation", 0), currency=currency)])
     if radr:
         writer.writerow(["RADR Adjusted Rate (%)", radr.get("adjusted_discount_rate_pct", "N/A")])
-        writer.writerow(["Risk-Adjusted NPV", radr.get("adjusted_npv", "N/A")])
+        writer.writerow([f"Risk-Adjusted NPV ({sym})", _format_pdf_currency(radr.get("adjusted_npv", 0), currency=currency)])
     writer.writerow([])
 
     # 7. Quality Scorecard
@@ -154,7 +217,7 @@ def generate_consolidated_csv(report_data: Dict[str, Any]) -> str:
     return output.getvalue()
 
 
-def generate_consolidated_pdf(report_data: Dict[str, Any]) -> bytes:
+def generate_consolidated_pdf(report_data: Dict[str, Any], currency: str = "INR") -> bytes:
     """Generate a publication-grade, styled PDF summary using ReportLab."""
     pdf_buffer = io.BytesIO()
     doc = SimpleDocTemplate(
@@ -171,6 +234,7 @@ def generate_consolidated_pdf(report_data: Dict[str, Any]) -> bytes:
     title_style = ParagraphStyle(
         "DocTitle",
         parent=styles["Heading1"],
+        fontName=FONT_NAME_BOLD,
         fontSize=18,
         leading=22,
         textColor=colors.HexColor("#0D47A1"),
@@ -179,6 +243,7 @@ def generate_consolidated_pdf(report_data: Dict[str, Any]) -> bytes:
     subtitle_style = ParagraphStyle(
         "DocSubtitle",
         parent=styles["Normal"],
+        fontName=FONT_NAME,
         fontSize=9,
         textColor=colors.HexColor("#546E7A"),
         spaceAfter=10,
@@ -186,6 +251,7 @@ def generate_consolidated_pdf(report_data: Dict[str, Any]) -> bytes:
     h2_style = ParagraphStyle(
         "SectionHeading",
         parent=styles["Heading2"],
+        fontName=FONT_NAME_BOLD,
         fontSize=11,
         leading=14,
         textColor=colors.HexColor("#1565C0"),
@@ -195,11 +261,13 @@ def generate_consolidated_pdf(report_data: Dict[str, Any]) -> bytes:
     body_style = ParagraphStyle(
         "BodyDark",
         parent=styles["Normal"],
+        fontName=FONT_NAME,
         fontSize=8,
         leading=11,
         textColor=colors.HexColor("#263238"),
     )
 
+    sym = RUPEE_CHAR if currency == "INR" else ("€" if currency == "EUR" else "$")
     elements = []
 
     # Title & Header
@@ -221,7 +289,7 @@ def generate_consolidated_pdf(report_data: Dict[str, Any]) -> bytes:
             Paragraph("<b>Project:</b>", body_style),
             Paragraph(str(proj.get("name", "N/A")), body_style),
             Paragraph("<b>Budget:</b>", body_style),
-            Paragraph(f"${float(proj.get('budget', 0)):,.0f}", body_style),
+            Paragraph(_format_pdf_currency(proj.get("budget", 0), currency=currency), body_style),
         ],
         [
             Paragraph("<b>Team Size:</b>", body_style),
@@ -238,6 +306,7 @@ def generate_consolidated_pdf(report_data: Dict[str, Any]) -> bytes:
     ]
     t_proj = Table(proj_table_data, colWidths=[90, 180, 90, 180])
     t_proj.setStyle(TableStyle([
+        ("FONTNAME", (0, 0), (-1, -1), FONT_NAME),
         ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#F1F5F9")),
         ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#CFD8DC")),
         ("PADDING", (0, 0), (-1, -1), 3),
@@ -259,9 +328,10 @@ def generate_consolidated_pdf(report_data: Dict[str, Any]) -> bytes:
         ])
     t_models = Table(model_rows, colWidths=[35, 120, 65, 320])
     t_models.setStyle(TableStyle([
+        ("FONTNAME", (0, 0), (-1, -1), FONT_NAME),
         ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#1565C0")),
         ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
-        ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+        ("FONTNAME", (0, 0), (-1, 0), FONT_NAME_BOLD),
         ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#B0BEC5")),
         ("PADDING", (0, 0), (-1, -1), 3),
         ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.HexColor("#F8FAFC")]),
@@ -277,12 +347,13 @@ def generate_consolidated_pdf(report_data: Dict[str, Any]) -> bytes:
     ]
     t_agile = Table(agile_rows, colWidths=[135, 135, 135, 135])
     t_agile.setStyle(TableStyle([
+        ("FONTNAME", (0, 0), (-1, -1), FONT_NAME),
         ("BACKGROUND", (0, 0), (0, -1), colors.HexColor("#EDE7F6")),
         ("BACKGROUND", (2, 0), (2, -1), colors.HexColor("#EDE7F6")),
         ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#D1C4E9")),
         ("PADDING", (0, 0), (-1, -1), 3),
-        ("FONTNAME", (0, 0), (0, -1), "Helvetica-Bold"),
-        ("FONTNAME", (2, 0), (2, -1), "Helvetica-Bold"),
+        ("FONTNAME", (0, 0), (0, -1), FONT_NAME_BOLD),
+        ("FONTNAME", (2, 0), (2, -1), FONT_NAME_BOLD),
     ]))
     elements.append(t_agile)
 
@@ -300,12 +371,13 @@ def generate_consolidated_pdf(report_data: Dict[str, Any]) -> bytes:
     ]
     t_est = Table(est_data, colWidths=[140, 130, 140, 130])
     t_est.setStyle(TableStyle([
+        ("FONTNAME", (0, 0), (-1, -1), FONT_NAME),
         ("BACKGROUND", (0, 0), (0, -1), colors.HexColor("#ECEFF1")),
         ("BACKGROUND", (2, 0), (2, -1), colors.HexColor("#ECEFF1")),
         ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#CFD8DC")),
         ("PADDING", (0, 0), (-1, -1), 3),
-        ("FONTNAME", (0, 0), (0, -1), "Helvetica-Bold"),
-        ("FONTNAME", (2, 0), (2, -1), "Helvetica-Bold"),
+        ("FONTNAME", (0, 0), (0, -1), FONT_NAME_BOLD),
+        ("FONTNAME", (2, 0), (2, -1), FONT_NAME_BOLD),
     ]))
     elements.append(t_est)
 
@@ -314,24 +386,25 @@ def generate_consolidated_pdf(report_data: Dict[str, Any]) -> bytes:
     risks = report_data.get("risks", {})
     ranked_risks = risks.get("ranked_risks", [])[:3]
 
-    risk_rows = [["ID", "Category", "P", "Impact ($)", "Exposure ($)", "Mitigation Plan"]]
+    risk_rows = [["ID", "Category", "P", f"Impact ({sym})", f"Exposure ({sym})", "Mitigation Plan"]]
     for r in ranked_risks:
         risk_rows.append([
             r.get("id"),
             r.get("category"),
             f"{r.get('probability'):.2f}",
-            f"${r.get('impact_cost'):,.0f}",
-            f"${r.get('exposure'):,.0f}",
+            _format_pdf_currency(r.get("impact_cost", 0), currency=currency),
+            _format_pdf_currency(r.get("exposure", 0), currency=currency),
             Paragraph(r.get("mitigation", "")[:80], body_style),
         ])
     if not ranked_risks:
         risk_rows.append(["-", "No risks logged", "-", "-", "-", "-"])
 
-    t_risks = Table(risk_rows, colWidths=[35, 110, 35, 60, 70, 230])
+    t_risks = Table(risk_rows, colWidths=[35, 110, 35, 65, 65, 230])
     t_risks.setStyle(TableStyle([
+        ("FONTNAME", (0, 0), (-1, -1), FONT_NAME),
         ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#37474F")),
         ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
-        ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+        ("FONTNAME", (0, 0), (-1, 0), FONT_NAME_BOLD),
         ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#B0BEC5")),
         ("PADDING", (0, 0), (-1, -1), 3),
     ]))
@@ -344,18 +417,19 @@ def generate_consolidated_pdf(report_data: Dict[str, Any]) -> bytes:
     radr = report_data.get("radr", {})
 
     biz_rows = [
-        ["Net Present Value (NPV)", f"${biz.get('npv', 0):,.2f}", "Expected NPV (EMV)", f"${scenario.get('expected_npv', 0):,.2f}"],
-        ["Simple ROI / Payback", f"{biz.get('roi_pct', 0):.1f}% / {biz.get('payback_period_years', 'N/A')} yrs", "NPV Standard Deviation", f"±${scenario.get('npv_standard_deviation', 0):,.2f}"],
-        ["Base Hurdle Rate", f"{biz.get('discount_rate_pct', 0)}%", "RADR Adjusted Rate & NPV", f"{radr.get('adjusted_discount_rate_pct', 0):.1f}% (${radr.get('adjusted_npv', 0):,.0f})"],
+        ["Net Present Value (NPV)", _format_pdf_currency(biz.get('npv', 0), currency=currency), "Expected NPV (EMV)", _format_pdf_currency(scenario.get('expected_npv', 0), currency=currency)],
+        ["Simple ROI / Payback", f"{biz.get('roi_pct', 0):.1f}% / {biz.get('payback_period_years', 'N/A')} yrs", "NPV Standard Deviation", f"±{_format_pdf_currency(scenario.get('npv_standard_deviation', 0), currency=currency)}"],
+        ["Base Hurdle Rate", f"{biz.get('discount_rate_pct', 0)}%", "RADR Adjusted Rate & NPV", f"{radr.get('adjusted_discount_rate_pct', 0):.1f}% ({_format_pdf_currency(radr.get('adjusted_npv', 0), currency=currency)})"],
     ]
     t_biz = Table(biz_rows, colWidths=[140, 130, 140, 130])
     t_biz.setStyle(TableStyle([
+        ("FONTNAME", (0, 0), (-1, -1), FONT_NAME),
         ("BACKGROUND", (0, 0), (0, -1), colors.HexColor("#E8F5E9")),
         ("BACKGROUND", (2, 0), (2, -1), colors.HexColor("#E8F5E9")),
         ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#C8E6C9")),
         ("PADDING", (0, 0), (-1, -1), 3),
-        ("FONTNAME", (0, 0), (0, -1), "Helvetica-Bold"),
-        ("FONTNAME", (2, 0), (2, -1), "Helvetica-Bold"),
+        ("FONTNAME", (0, 0), (0, -1), FONT_NAME_BOLD),
+        ("FONTNAME", (2, 0), (2, -1), FONT_NAME_BOLD),
     ]))
     elements.append(t_biz)
 
@@ -383,13 +457,14 @@ def generate_consolidated_pdf(report_data: Dict[str, Any]) -> bytes:
 
     t_qual = Table(q_rows, colWidths=[180, 110, 100, 150])
     t_qual.setStyle(TableStyle([
+        ("FONTNAME", (0, 0), (-1, -1), FONT_NAME),
         ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#00695C")),
         ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
-        ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+        ("FONTNAME", (0, 0), (-1, 0), FONT_NAME_BOLD),
         ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#B2DFDB")),
         ("PADDING", (0, 0), (-1, -1), 3),
         ("BACKGROUND", (0, -1), (-1, -1), colors.HexColor("#E0F2F1")),
-        ("FONTNAME", (0, -1), (-1, -1), "Helvetica-Bold"),
+        ("FONTNAME", (0, -1), (-1, -1), FONT_NAME_BOLD),
     ]))
     elements.append(t_qual)
 

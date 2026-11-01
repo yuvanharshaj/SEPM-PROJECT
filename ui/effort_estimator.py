@@ -14,24 +14,59 @@ from core.function_points import (
 )
 from core.cosmic import calculate_cosmic_ffp
 from core.pert import calculate_pert
-from ui.components import render_page_header
+from ui.theme import render_page_header, render_kpi_card, render_empty_state_html, apply_plotly_theme
 from db.database import DatabaseManager
 
 
 def render_effort_estimator_page():
     render_page_header(
-        title="Software Effort & Size Estimator",
-        subtitle="Decomposition and empirical estimation: Boehm's COCOMO, Albrecht FPA, COSMIC FFP, and PERT three-point analysis.",
-        module_tag="VTU 24CS51: Module 4 & 5 (Cost & Effort Estimation)",
-        co_tag="CO4: Apply Algorithmic & Decomposition Techniques to Predict Effort and Schedule",
+        title="Software Effort & Sizing Workbench",
+        subtitle="Empirical & algorithmic estimation: Boehm's Basic COCOMO, Albrecht's FPA, COSMIC FFP, and PERT 3-point analysis.",
+        module_tag="VTU 24CS51: Module 4 & 5",
+        co_tag="CO4: Algorithmic & Decomposition Effort Estimation",
     )
 
     active = st.session_state.get("current_project")
     if not active:
-        st.warning("Please select or initialize a project in 'Project Setup' first.")
+        st.markdown(
+            render_empty_state_html(
+                icon="📐",
+                title="No Active Project Selected",
+                description="Please select or configure a project benchmark in 'Project Setup' to perform sizing and effort estimation.",
+            ),
+            unsafe_allow_html=True,
+        )
         return
 
     db: DatabaseManager = st.session_state.db
+
+    # Summary Comparison Card at the top
+    curr_kloc = float(active.get("kloc", 25.0))
+    curr_mode = active.get("cocomo_mode", "organic")
+    cocomo_quick = calculate_cocomo(curr_kloc, curr_mode)
+
+    st.markdown(
+        f"""
+        <div class="pc-card" style="background: linear-gradient(135deg, rgba(37, 99, 235, 0.05), rgba(13, 148, 136, 0.05)); border: 1px solid rgba(37, 99, 235, 0.2); margin-bottom: 20px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
+                <div>
+                    <div style="font-size: 0.72rem; text-transform: uppercase; font-weight: 700; color: var(--pc-primary-dark, #1E40AF); letter-spacing: 0.04em;">Estimation Baseline &bull; {active.get('name', 'N/A')}</div>
+                    <div style="font-size: 1.25rem; font-weight: 800; color: var(--pc-text-main, #0F172A); margin-top: 2px;">
+                        {curr_kloc:.1f} KLOC Codebase &bull; {curr_mode.title()} Lifecycle
+                    </div>
+                </div>
+                <div style="display: flex; gap: 16px; font-size: 0.88rem; font-weight: 600; color: var(--pc-text-muted, #64748B);">
+                    <span>Effort: <b style="color: var(--pc-primary, #2563EB);">{cocomo_quick.effort_pm:.1f} PM</b></span>
+                    <span>&bull;</span>
+                    <span>Duration: <b style="color: var(--pc-accent, #0D9488);">{cocomo_quick.duration_months:.1f} Mos</b></span>
+                    <span>&bull;</span>
+                    <span>Staff: <b style="color: var(--pc-text-main, #0F172A);">{cocomo_quick.avg_staff:.1f} Engineers</b></span>
+                </div>
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
 
     tab_cocomo, tab_fp, tab_cosmic, tab_pert = st.tabs([
         "📐 (a) Basic COCOMO Model",
@@ -51,7 +86,6 @@ def render_effort_estimator_page():
         col_in1, col_in2 = st.columns([1, 1])
 
         with col_in1:
-            curr_mode = active.get("cocomo_mode", "organic")
             modes = ["organic", "semi-detached", "embedded"]
             selected_mode = st.selectbox(
                 "Development Mode:",
@@ -61,7 +95,6 @@ def render_effort_estimator_page():
             )
 
         with col_in2:
-            curr_kloc = float(active.get("kloc", 25.0))
             input_kloc = st.number_input(
                 "Estimated Codebase Size (KLOC - Thousands of LOC):",
                 min_value=0.5,
@@ -79,16 +112,54 @@ def render_effort_estimator_page():
 
         cocomo_res = calculate_cocomo(input_kloc, selected_mode)
 
-        m1, m2, m3, m4 = st.columns(4)
-        with m1:
-            st.metric("Required Effort", f"{cocomo_res.effort_pm:.1f} PM", help="Person-Months of labor")
-        with m2:
-            st.metric("Development Schedule", f"{cocomo_res.duration_months:.1f} Months", help="Nominal calendar duration")
-        with m3:
-            st.metric("Recommended Staff", f"{cocomo_res.avg_staff:.1f} Engineers", help="Average concurrent team size")
-        with m4:
-            st.metric("Productivity", f"{cocomo_res.productivity_loc_pm:.0f} LOC/PM", help="Lines of code delivered per person-month")
+        st.markdown("<div style='height: 10px;'></div>", unsafe_allow_html=True)
+        m_cols = st.columns(4)
+        with m_cols[0]:
+            st.markdown(
+                render_kpi_card(
+                    label="Required Effort",
+                    value=f"{cocomo_res.effort_pm:.1f} PM",
+                    subtitle="Person-Months of labor",
+                    icon="💼",
+                    accent_color="#2563EB",
+                ),
+                unsafe_allow_html=True,
+            )
+        with m_cols[1]:
+            st.markdown(
+                render_kpi_card(
+                    label="Development Schedule",
+                    value=f"{cocomo_res.duration_months:.1f} Mos",
+                    subtitle="Nominal calendar duration",
+                    icon="⏱️",
+                    accent_color="#0D9488",
+                ),
+                unsafe_allow_html=True,
+            )
+        with m_cols[2]:
+            st.markdown(
+                render_kpi_card(
+                    label="Staffing Capacity",
+                    value=f"{cocomo_res.avg_staff:.1f} Staff",
+                    subtitle="Average team size",
+                    icon="👥",
+                    accent_color="#10B981",
+                ),
+                unsafe_allow_html=True,
+            )
+        with m_cols[3]:
+            st.markdown(
+                render_kpi_card(
+                    label="Productivity Rate",
+                    value=f"{cocomo_res.productivity_loc_pm:.0f}",
+                    subtitle="LOC / Person-Month",
+                    icon="⚡",
+                    accent_color="#8B5CF6",
+                ),
+                unsafe_allow_html=True,
+            )
 
+        st.markdown("<div style='height: 14px;'></div>", unsafe_allow_html=True)
         st.markdown("#### 📈 Multi-Mode Comparative Sensitivity")
         kloc_range = [max(1.0, input_kloc * f) for f in [0.5, 0.75, 1.0, 1.25, 1.5, 2.0]]
         comparison_records = []
@@ -109,16 +180,15 @@ def render_effort_estimator_page():
             y="Effort (PM)",
             color="Mode",
             markers=True,
-            title="Effort Scaling Across COCOMO Modes",
         )
-        fig_cocomo.update_layout(height=320, margin=dict(l=20, r=20, t=40, b=20))
+        fig_cocomo = apply_plotly_theme(fig_cocomo, title="Effort Scaling Across COCOMO Modes", height=340)
         st.plotly_chart(fig_cocomo, use_container_width=True)
 
         if st.button("💾 Persist COCOMO Parameters to Active Project"):
             active["cocomo_mode"] = selected_mode
             active["kloc"] = float(input_kloc)
             db.save_complete_project(active)
-            st.success("COCOMO sizing parameters saved!")
+            st.success("COCOMO sizing parameters saved to SQLite database!")
 
     # -------------------------------------------------------------
     # TAB B: FUNCTION POINTS (Albrecht FPA)
@@ -138,7 +208,7 @@ def render_effort_estimator_page():
         saved_gsc = active.get("gsc_ratings") or [3] * 14
 
         st.markdown("#### 1. Information Domain Characteristics (UFP)")
-        st.caption("Count user-facing transactions and logical files across Low, Average, and High complexity:")
+        st.caption("Count user transactions and logical files across Low, Average, and High complexity:")
 
         comp_inputs = {}
         for comp_key, weights in FP_COMPLEXITY_WEIGHTS.items():
@@ -186,17 +256,54 @@ def render_effort_estimator_page():
 
         fp_result = calculate_function_points(comp_inputs, gsc_ratings)
 
-        f1, f2, f3, f4 = st.columns(4)
-        with f1:
-            st.metric("Unadjusted FP (UFP)", f"{fp_result.ufp:.0f}")
-        with f2:
-            st.metric("Total Influence (TDI)", f"{fp_result.tdi} / 70")
-        with f3:
-            st.metric("Adjustment Factor (VAF)", f"{fp_result.vaf:.4f}")
-        with f4:
-            st.metric("Adjusted FP (AFP)", f"{fp_result.afp:.1f}")
+        st.markdown("<div style='height: 10px;'></div>", unsafe_allow_html=True)
+        f_cols = st.columns(4)
+        with f_cols[0]:
+            st.markdown(
+                render_kpi_card(
+                    label="Unadjusted FP",
+                    value=f"{fp_result.ufp:.0f}",
+                    subtitle="Raw Information Domain",
+                    icon="📊",
+                    accent_color="#2563EB",
+                ),
+                unsafe_allow_html=True,
+            )
+        with f_cols[1]:
+            st.markdown(
+                render_kpi_card(
+                    label="Total Degree (TDI)",
+                    value=f"{fp_result.tdi} / 70",
+                    subtitle="Environmental Rating",
+                    icon="🌐",
+                    accent_color="#0D9488",
+                ),
+                unsafe_allow_html=True,
+            )
+        with f_cols[2]:
+            st.markdown(
+                render_kpi_card(
+                    label="Adjustment (VAF)",
+                    value=f"{fp_result.vaf:.4f}",
+                    subtitle="Multiplier (0.65 - 1.35)",
+                    icon="⚙️",
+                    accent_color="#F59E0B",
+                ),
+                unsafe_allow_html=True,
+            )
+        with f_cols[3]:
+            st.markdown(
+                render_kpi_card(
+                    label="Adjusted FP (AFP)",
+                    value=f"{fp_result.afp:.1f}",
+                    subtitle="Final Normalized Sizing",
+                    icon="🎯",
+                    accent_color="#10B981",
+                ),
+                unsafe_allow_html=True,
+            )
 
-        st.markdown("---")
+        st.markdown("<div style='height: 14px;'></div>", unsafe_allow_html=True)
         st.markdown("#### 3. Language Gear Factors & Equivalent Sizing (FP ➡️ KLOC)")
         df_lang = pd.DataFrame([
             {
@@ -238,7 +345,6 @@ def render_effort_estimator_page():
         )
         st.latex(r"\text{Process Size (CFP)} = E + X + R + W, \quad \text{Total Size} = \sum \text{CFP}_i")
 
-        # Session state for cosmic processes if not present
         if "cosmic_processes" not in st.session_state:
             st.session_state.cosmic_processes = [
                 {"process_id": "P-01", "name": "User Registration & KYC", "entries": 4, "exits": 3, "reads": 2, "writes": 2},
@@ -267,18 +373,54 @@ def render_effort_estimator_page():
             team_size=team_sz,
         )
 
-        # Metric KPI cards
-        cm1, cm2, cm3, cm4 = st.columns(4)
-        with cm1:
-            st.metric("Total COSMIC Size", f"{cosmic_res.total_cfp} CFP")
-        with cm2:
-            st.metric("Total Effort (Hours)", f"{cosmic_res.total_effort_hours:,.0f} Hours")
-        with cm3:
-            st.metric("Total Effort (PM)", f"{cosmic_res.total_effort_pm:.1f} PM", help="Person-Months (at 160 hrs/mo)")
-        with cm4:
-            st.metric("Estimated Schedule", f"{cosmic_res.estimated_duration_months:.1f} Months", f"With {team_sz} staff")
+        st.markdown("<div style='height: 10px;'></div>", unsafe_allow_html=True)
+        cm_cols = st.columns(4)
+        with cm_cols[0]:
+            st.markdown(
+                render_kpi_card(
+                    label="COSMIC Size",
+                    value=f"{cosmic_res.total_cfp} CFP",
+                    subtitle="Data Movements",
+                    icon="🌌",
+                    accent_color="#2563EB",
+                ),
+                unsafe_allow_html=True,
+            )
+        with cm_cols[1]:
+            st.markdown(
+                render_kpi_card(
+                    label="Labor Hours",
+                    value=f"{cosmic_res.total_effort_hours:,.0f} Hrs",
+                    subtitle=f"{prod_hours:.0f} hrs / CFP",
+                    icon="⏳",
+                    accent_color="#0D9488",
+                ),
+                unsafe_allow_html=True,
+            )
+        with cm_cols[2]:
+            st.markdown(
+                render_kpi_card(
+                    label="Person-Months",
+                    value=f"{cosmic_res.total_effort_pm:.1f} PM",
+                    subtitle="160 hrs / month",
+                    icon="💼",
+                    accent_color="#10B981",
+                ),
+                unsafe_allow_html=True,
+            )
+        with cm_cols[3]:
+            st.markdown(
+                render_kpi_card(
+                    label="Schedule Time",
+                    value=f"{cosmic_res.estimated_duration_months:.1f} Mos",
+                    subtitle=f"{team_sz} staff team",
+                    icon="⏱️",
+                    accent_color="#8B5CF6",
+                ),
+                unsafe_allow_html=True,
+            )
 
-        # Data Movement breakdown chart
+        st.markdown("<div style='height: 14px;'></div>", unsafe_allow_html=True)
         col_c_tbl, col_c_chart = st.columns([1.4, 1.0])
 
         with col_c_tbl:
@@ -304,13 +446,12 @@ def render_effort_estimator_page():
                 df_movements,
                 names="Data Movement",
                 values="Count (CFP)",
-                color_discrete_sequence=["#1976D2", "#388E3C", "#F57C00", "#7B1FA2"],
-                hole=0.4,
+                color_discrete_sequence=["#2563EB", "#0D9488", "#F59E0B", "#8B5CF6"],
+                hole=0.45,
             )
-            fig_move.update_layout(height=280, margin=dict(l=20, r=20, t=20, b=20))
+            fig_move = apply_plotly_theme(fig_move, title="Data Movements", height=280)
             st.plotly_chart(fig_move, use_container_width=True)
 
-        # Form to add a new process
         with st.expander("➕ Add Functional Process to COSMIC Model"):
             with st.form("add_cosmic_proc_form"):
                 cp_id = st.text_input("Process ID", value=f"P-{len(st.session_state.cosmic_processes)+1:02d}")
@@ -362,18 +503,54 @@ def render_effort_estimator_page():
 
         pert_res = calculate_pert(st.session_state.pert_tasks)
 
-        # KPI Metric cards
-        p1, p2, p3, p4 = st.columns(4)
-        with p1:
-            st.metric("Total Expected Effort", f"{pert_res.total_expected:.1f} Hours", f"{pert_res.total_expected / 160.0:.2f} PM")
-        with p2:
-            st.metric("Combined Std Dev", f"{pert_res.combined_sd:.2f} Hours", f"Variance: {pert_res.combined_variance:.1f}")
-        with p3:
-            st.metric("90% Confidence Range", f"{pert_res.confidence_90_range[0]:.0f} – {pert_res.confidence_90_range[1]:.0f} Hrs", "Z = 1.645")
-        with p4:
-            st.metric("Total Decomposed Tasks", f"{pert_res.total_tasks} Tasks")
+        st.markdown("<div style='height: 10px;'></div>", unsafe_allow_html=True)
+        p_cols = st.columns(4)
+        with p_cols[0]:
+            st.markdown(
+                render_kpi_card(
+                    label="Expected Effort",
+                    value=f"{pert_res.total_expected:.1f} Hrs",
+                    subtitle=f"{pert_res.total_expected / 160.0:.2f} Person-Months",
+                    icon="🎯",
+                    accent_color="#2563EB",
+                ),
+                unsafe_allow_html=True,
+            )
+        with p_cols[1]:
+            st.markdown(
+                render_kpi_card(
+                    label="Std Deviation (σ)",
+                    value=f"±{pert_res.combined_sd:.2f} Hrs",
+                    subtitle=f"Variance: {pert_res.combined_variance:.1f}",
+                    icon="📏",
+                    accent_color="#0D9488",
+                ),
+                unsafe_allow_html=True,
+            )
+        with p_cols[2]:
+            st.markdown(
+                render_kpi_card(
+                    label="90% Range",
+                    value=f"{pert_res.confidence_90_range[0]:.0f}–{pert_res.confidence_90_range[1]:.0f} H",
+                    subtitle="Z = 1.645 Confidence",
+                    icon="🔒",
+                    accent_color="#10B981",
+                ),
+                unsafe_allow_html=True,
+            )
+        with p_cols[3]:
+            st.markdown(
+                render_kpi_card(
+                    label="WBS Scope",
+                    value=f"{pert_res.total_tasks} Tasks",
+                    subtitle="Decomposed Work Items",
+                    icon="📋",
+                    accent_color="#8B5CF6",
+                ),
+                unsafe_allow_html=True,
+            )
 
-        # Confidence Table & Chart
+        st.markdown("<div style='height: 14px;'></div>", unsafe_allow_html=True)
         col_p_tbl, col_p_chart = st.columns([1.4, 1.0])
 
         with col_p_tbl:
@@ -404,13 +581,11 @@ def render_effort_estimator_page():
                     x=list(pert_res.category_breakdown.keys()),
                     y=list(pert_res.category_breakdown.values()),
                     labels={"x": "WBS Category", "y": "Expected Effort (Hours)"},
-                    title="Effort by WBS Category",
                     color=list(pert_res.category_breakdown.keys()),
                 )
-                fig_cat.update_layout(height=240, margin=dict(l=10, r=10, t=30, b=10), showlegend=False)
+                fig_cat = apply_plotly_theme(fig_cat, title="Effort by WBS Category", height=240, show_legend=False)
                 st.plotly_chart(fig_cat, use_container_width=True)
 
-        # Form to add task
         with st.expander("➕ Add WBS Task to PERT Estimator"):
             with st.form("add_pert_task_form"):
                 pt_id = st.text_input("Task ID", value=f"WBS-{len(st.session_state.pert_tasks)+1:02d}")

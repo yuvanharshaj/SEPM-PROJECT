@@ -92,7 +92,18 @@ Software project failures frequently originate from premature process model sele
 
 8. **📄 Consolidated Executive Synthesis**:
    - Unified executive reporting dashboard uniting all analytical engines.
-   - One-click publication-grade **PDF Report Generation** (built with ReportLab) and raw **CSV Dataset Export**.
+   - One-click publication-grade **PDF Report Generation** (built with ReportLab with DejaVu Sans TrueType typography for native ₹ rendering) and raw **CSV Dataset Export**.
+
+9. **🇮🇳 Multi-Currency Engine (INR ₹ Default)**:
+   - First-class support for Indian Rupee (₹) with Indian digit grouping (`12,34,567`) and compact lakh/crore KPI notation (`₹70.0 L`, `₹2.5 Cr`), alongside USD ($) and EUR (€).
+   - Global sidebar selector dynamically updates all UI components, metric cards, charts, and PDF/CSV export artifacts without exchange-rate conversion.
+   - Realistic INR benchmarks (~₹70 Lakh College ERP, ~₹2.5 Crore Mobile Banking, ~₹1.2 Crore Embedded IoT).
+
+10. **🎨 Enterprise Design System & Micro-Interactions**:
+    - Centralized CSS tokens and Google Fonts (*Plus Jakarta Sans*, *Inter*, *JetBrains Mono*).
+    - Elevated KPI metric cards with top accent strips, count-up animations, and hover lifts.
+    - Accessible light/dark theme contrast compliance (WCAG AA).
+    - Standardized Plotly chart theming with smooth 400ms transitions and transparent canvases.
 
 ---
 
@@ -234,7 +245,7 @@ SEPM-PROJECT/
 │       ├── 07_consolidated_report.png
 │       └── 08_agile_lab.png
 │
-└── tests/                         # Automated test suite (42 unit tests)
+└── tests/                         # Automated test suite (43 unit tests)
     ├── test_advisor.py            # Lifecycle scoring & weights validation
     ├── test_agile.py              # Agile models, sprint planning & cost curves
     ├── test_business_case.py      # NPV, ROI, Payback, Scenario EMV & RADR tests
@@ -273,7 +284,7 @@ Follow this 7-step walkthrough using the preloaded **"College ERP System"** samp
 1. **Step 1: Inspect Project Constraints (Project Setup)**
    - Open **Project Setup** in the sidebar.
    - Select **College ERP System** from the project selector.
-   - Review the team size (14 engineers), duration (12 months), allocated budget ($85,000), and requirement volatility (Medium).
+   - Review the team size (14 engineers), duration (12 months), allocated budget (₹70,00,000 / ₹70.0 L), and requirement volatility (Medium). Toggle between INR (₹), USD ($), and EUR (€) in the sidebar.
 2. **Step 2: Recommend an Optimal Lifecycle (Process Model Advisor)**
    - Navigate to **Process Model Advisor**.
    - Inspect the ranked compatibility chart. Observe how **Incremental / Waterfall** scores highest due to medium stability and academic calendar release gates.
