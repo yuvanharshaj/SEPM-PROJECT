@@ -51,3 +51,7 @@ Desktop.ini
 # Streamlit
 .streamlit/secrets.toml
 
+
+# Agents cache
+.agents/
+.gemini/
