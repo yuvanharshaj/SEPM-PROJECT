@@ -1,10 +1,13 @@
 """Business Case, Cost-Benefit Analysis & Economic Feasibility.
 
 Syllabus Reference:
-    VTU 24CS51 Software Engineering & Project Management - Module 4:
+    VTU 24CS51 Software Engineering & Project Management - Module 3:
     Project Evaluation, Economic Feasibility, Cost-Benefit Analysis,
     Cash Flow Forecasting, Net Present Value (NPV), Return on Investment (ROI),
-    Payback Period.
+    Payback Period, Risk Evaluation via Scenarios (Expected NPV / EMV),
+    and Risk-Adjusted Discount Rate (RADR).
+Course Outcome:
+    CO3: Formulate Project Business Case, Cash Flow Projections and Economic Feasibility.
 
 Formulas:
     1. Net Cash Flow at Year t:
@@ -25,11 +28,21 @@ Formulas:
 
     6. Payback Period (Undiscounted & Discounted):
        Year where cumulative net cash flow turns non-negative, with linear interpolation:
-       Payback = Year_{t-1} + (Remaining_Deficit / CashFlow_t)
+       Payback = Year_{t-1} + (Remaining_Deficit_{t-1} / CashFlow_t)
+
+    7. Scenario Risk Evaluation (Expected Monetary Value / Expected NPV):
+       E(NPV) = sum(p_i * NPV_i) for i in {Optimistic, Most Likely, Pessimistic}
+       Var(NPV) = sum(p_i * (NPV_i - E(NPV))^2)
+       SD(NPV) = sqrt(Var(NPV))
+
+    8. Risk-Adjusted Discount Rate (RADR):
+       r_adjusted = r_base + r_risk_premium
+       NPV_RADR = -Initial_Investment + sum_{t=1}^N [ NCF_t / ((1 + r_adjusted)^t) ]
 """
 
 from dataclasses import dataclass
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Tuple
+import math
 
 
 @dataclass
@@ -92,9 +105,80 @@ class BusinessCaseResult:
         }
 
 
+@dataclass
+class ScenarioItem:
+    name: str
+    probability: float
+    initial_investment: float
+    annual_benefits: List[float]
+    annual_costs: List[float]
+    npv: float
+    roi_pct: float
+    payback_years: Optional[float]
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "name": self.name,
+            "probability": round(self.probability, 2),
+            "initial_investment": round(self.initial_investment, 2),
+            "annual_benefits": [round(b, 2) for b in self.annual_benefits],
+            "annual_costs": [round(c, 2) for c in self.annual_costs],
+            "npv": round(self.npv, 2),
+            "roi_pct": round(self.roi_pct, 2),
+            "payback_years": round(self.payback_years, 2) if self.payback_years is not None else None,
+        }
+
+
+@dataclass
+class ScenarioEvaluationResult:
+    scenarios: List[ScenarioItem]
+    expected_npv: float
+    expected_roi_pct: float
+    npv_variance: float
+    npv_standard_deviation: float
+    risk_summary: str
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "expected_npv": round(self.expected_npv, 2),
+            "expected_roi_pct": round(self.expected_roi_pct, 2),
+            "npv_variance": round(self.npv_variance, 2),
+            "npv_standard_deviation": round(self.npv_standard_deviation, 2),
+            "risk_summary": self.risk_summary,
+            "scenarios": [s.to_dict() for s in self.scenarios],
+        }
+
+
+@dataclass
+class RiskAdjustedDiscountResult:
+    base_discount_rate_pct: float
+    risk_premium_pct: float
+    adjusted_discount_rate_pct: float
+    base_npv: float
+    adjusted_npv: float
+    npv_delta: float
+    base_payback: Optional[float]
+    adjusted_payback: Optional[float]
+    is_viable_at_radr: bool
+    summary: str
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "base_discount_rate_pct": round(self.base_discount_rate_pct, 2),
+            "risk_premium_pct": round(self.risk_premium_pct, 2),
+            "adjusted_discount_rate_pct": round(self.adjusted_discount_rate_pct, 2),
+            "base_npv": round(self.base_npv, 2),
+            "adjusted_npv": round(self.adjusted_npv, 2),
+            "npv_delta": round(self.npv_delta, 2),
+            "base_payback": round(self.base_payback, 2) if self.base_payback is not None else None,
+            "adjusted_payback": round(self.adjusted_payback, 2) if self.adjusted_payback is not None else None,
+            "is_viable_at_radr": self.is_viable_at_radr,
+            "summary": self.summary,
+        }
+
+
 def _calculate_payback(cumulative_series: List[float], annual_flows: List[float]) -> Optional[float]:
     """Calculate payback year with linear interpolation."""
-    # Year 0 is -initial_investment
     for i in range(1, len(cumulative_series)):
         if cumulative_series[i] >= 0:
             deficit_before = abs(cumulative_series[i - 1])
@@ -112,17 +196,7 @@ def evaluate_business_case(
     annual_costs: List[float] | float = 0.0,
     discount_rate_pct: float = 10.0,
 ) -> BusinessCaseResult:
-    """Perform comprehensive Cost-Benefit Analysis (NPV, ROI, Payback).
-
-    Args:
-        initial_investment: Capital expenditure / upfront dev cost (> 0).
-        annual_benefits: List of projected benefits per year.
-        annual_costs: List of recurring maintenance/operational costs per year, or single scalar.
-        discount_rate_pct: Annual discount rate as a percentage (e.g. 10.0 for 10%).
-
-    Returns:
-        BusinessCaseResult with yearly cash flows and executive evaluation.
-    """
+    """Perform comprehensive Cost-Benefit Analysis (NPV, ROI, Payback)."""
     if initial_investment <= 0:
         raise ValueError(f"Initial investment must be positive, got {initial_investment}")
 
@@ -141,7 +215,6 @@ def evaluate_business_case(
 
     r = discount_rate_pct / 100.0
 
-    # Year 0 Baseline
     year_zero = CashFlowYear(
         year=0,
         benefit=0.0,
@@ -188,16 +261,9 @@ def evaluate_business_case(
             )
         )
 
-    # Net Present Value = cumulative discounted cash flow at final year
     npv = cum_disc
-
-    # Net Profit = sum of net cash flows - initial investment
     net_profit = sum(f.net_cash_flow for f in flows[1:]) - initial_investment
-
-    # Simple ROI (%)
     roi_pct = (net_profit / initial_investment) * 100.0
-
-    # Discounted ROI (%)
     discounted_roi_pct = (npv / initial_investment) * 100.0
 
     cum_undisc_list = [f.cumulative_cash_flow for f in flows]
@@ -210,14 +276,14 @@ def evaluate_business_case(
 
     if is_viable:
         verdict = (
-            f"Financially VIABLE: Generates positive NPV of {npv:,.2f} at a {discount_rate_pct:.1f}% "
+            f"Financially VIABLE: Generates positive NPV of ${npv:,.2f} at a {discount_rate_pct:.1f}% "
             f"discount rate with an ROI of {roi_pct:.1f}%. Capital investment is recovered in "
             f"{f'{payback_undisc:.2f} years' if payback_undisc else 'N/A'} "
             f"(discounted payback: {f'{payback_disc:.2f} years' if payback_disc else 'exceeds project lifespan'})."
         )
     else:
         verdict = (
-            f"Financially HIGH-RISK / UNVIABLE: Generates negative NPV of {npv:,.2f}. "
+            f"Financially HIGH-RISK / UNVIABLE: Generates negative NPV of ${npv:,.2f}. "
             f"Returns fail to overcome the {discount_rate_pct:.1f}% cost of capital over {n_years} years."
         )
 
@@ -238,3 +304,146 @@ def evaluate_business_case(
         summary_verdict=verdict,
     )
 
+
+def evaluate_scenario_risk(
+    base_investment: float,
+    base_benefits: List[float],
+    base_costs: List[float],
+    discount_rate_pct: float = 10.0,
+    optimistic_multiplier: float = 1.25,
+    pessimistic_multiplier: float = 0.70,
+    probabilities: Tuple[float, float, float] = (0.25, 0.50, 0.25),
+) -> ScenarioEvaluationResult:
+    """Evaluate financial risk across Optimistic, Most Likely, and Pessimistic scenarios.
+
+    Args:
+        base_investment: Nominal initial capital.
+        base_benefits: Nominal annual cash inflows.
+        base_costs: Nominal annual operating costs.
+        discount_rate_pct: Base cost of capital.
+        optimistic_multiplier: Benefit scaler for optimistic scenario (e.g. 1.25 for +25%).
+        pessimistic_multiplier: Benefit scaler for pessimistic scenario (e.g. 0.70 for -30%).
+        probabilities: Probabilities for (Optimistic, Most Likely, Pessimistic), summing to 1.0.
+
+    Returns:
+        ScenarioEvaluationResult with Expected NPV (EMV), variance, and standard deviation.
+    """
+    p_opt, p_likely, p_pess = probabilities
+    total_p = p_opt + p_likely + p_pess
+    if not math.isclose(total_p, 1.0, rel_tol=1e-3):
+        p_opt, p_likely, p_pess = p_opt / total_p, p_likely / total_p, p_pess / total_p
+
+    # 1. Optimistic Scenario: +benefit, -costs, slightly lower Capex
+    opt_inv = base_investment * 0.95
+    opt_bens = [b * optimistic_multiplier for b in base_benefits]
+    opt_costs = [c * 0.90 for c in base_costs]
+    res_opt = evaluate_business_case(opt_inv, opt_bens, opt_costs, discount_rate_pct)
+
+    # 2. Most Likely Scenario: nominal
+    res_likely = evaluate_business_case(base_investment, base_benefits, base_costs, discount_rate_pct)
+
+    # 3. Pessimistic Scenario: -benefit, +costs, slightly higher Capex
+    pess_inv = base_investment * 1.15
+    pess_bens = [b * pessimistic_multiplier for b in base_benefits]
+    pess_costs = [c * 1.15 for c in base_costs]
+    res_pess = evaluate_business_case(pess_inv, pess_bens, pess_costs, discount_rate_pct)
+
+    scenarios = [
+        ScenarioItem(
+            name="Optimistic",
+            probability=p_opt,
+            initial_investment=opt_inv,
+            annual_benefits=opt_bens,
+            annual_costs=opt_costs,
+            npv=res_opt.npv,
+            roi_pct=res_opt.roi_pct,
+            payback_years=res_opt.payback_period_years,
+        ),
+        ScenarioItem(
+            name="Most Likely",
+            probability=p_likely,
+            initial_investment=base_investment,
+            annual_benefits=base_benefits,
+            annual_costs=base_costs,
+            npv=res_likely.npv,
+            roi_pct=res_likely.roi_pct,
+            payback_years=res_likely.payback_period_years,
+        ),
+        ScenarioItem(
+            name="Pessimistic",
+            probability=p_pess,
+            initial_investment=pess_inv,
+            annual_benefits=pess_bens,
+            annual_costs=pess_costs,
+            npv=res_pess.npv,
+            roi_pct=res_pess.roi_pct,
+            payback_years=res_pess.payback_period_years,
+        ),
+    ]
+
+    expected_npv = (p_opt * res_opt.npv) + (p_likely * res_likely.npv) + (p_pess * res_pess.npv)
+    expected_roi = (p_opt * res_opt.roi_pct) + (p_likely * res_likely.roi_pct) + (p_pess * res_pess.roi_pct)
+
+    variance_npv = (
+        p_opt * ((res_opt.npv - expected_npv) ** 2)
+        + p_likely * ((res_likely.npv - expected_npv) ** 2)
+        + p_pess * ((res_pess.npv - expected_npv) ** 2)
+    )
+    sd_npv = math.sqrt(variance_npv)
+
+    if expected_npv > 0 and res_pess.npv >= 0:
+        summary = f"Low Downside Risk: Expected NPV is ${expected_npv:,.2f} with all scenarios yielding positive returns."
+    elif expected_npv > 0:
+        summary = f"Moderate Risk: Expected NPV is positive (${expected_npv:,.2f}), but pessimistic scenario yields ${res_pess.npv:,.2f}."
+    else:
+        summary = f"High Downside Risk: Expected NPV is negative (${expected_npv:,.2f}). Project faces adverse return distribution."
+
+    return ScenarioEvaluationResult(
+        scenarios=scenarios,
+        expected_npv=expected_npv,
+        expected_roi_pct=expected_roi,
+        npv_variance=variance_npv,
+        npv_standard_deviation=sd_npv,
+        risk_summary=summary,
+    )
+
+
+def evaluate_radr(
+    initial_investment: float,
+    annual_benefits: List[float],
+    annual_costs: List[float],
+    base_discount_rate_pct: float = 10.0,
+    risk_premium_pct: float = 3.0,
+) -> RiskAdjustedDiscountResult:
+    """Evaluate business case using Risk-Adjusted Discount Rate (RADR)."""
+    base_res = evaluate_business_case(initial_investment, annual_benefits, annual_costs, base_discount_rate_pct)
+    adj_rate = base_discount_rate_pct + risk_premium_pct
+    radr_res = evaluate_business_case(initial_investment, annual_benefits, annual_costs, adj_rate)
+
+    delta = radr_res.npv - base_res.npv
+    viable = radr_res.npv > 0
+
+    if viable:
+        summary = (
+            f"Resilient: Project remains viable under RADR of {adj_rate:.1f}% "
+            f"({base_discount_rate_pct:.1f}% base + {risk_premium_pct:.1f}% risk premium), "
+            f"yielding NPV of ${radr_res.npv:,.2f}."
+        )
+    else:
+        summary = (
+            f"Vulnerable: Applying a {risk_premium_pct:.1f}% risk premium increases the hurdle rate to {adj_rate:.1f}%, "
+            f"causing NPV to drop into negative territory (${radr_res.npv:,.2f})."
+        )
+
+    return RiskAdjustedDiscountResult(
+        base_discount_rate_pct=base_discount_rate_pct,
+        risk_premium_pct=risk_premium_pct,
+        adjusted_discount_rate_pct=adj_rate,
+        base_npv=base_res.npv,
+        adjusted_npv=radr_res.npv,
+        npv_delta=delta,
+        base_payback=base_res.payback_period_years,
+        adjusted_payback=radr_res.payback_period_years,
+        is_viable_at_radr=viable,
+        summary=summary,
+    )
