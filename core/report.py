@@ -2,8 +2,10 @@
 
 Syllabus Reference:
     VTU 24CS51 Software Engineering & Project Management - Modules 1-5:
-    Consolidated decision-support synthesis uniting Process Selection, Cost & Effort Estimation,
-    Risk Management, Economic Evaluation, and McCall Software Quality Assurance.
+    Consolidated decision-support synthesis uniting Process Selection (M1),
+    Agile Sprint Planning (M2), Project Evaluation & Business Case (M3),
+    Effort Estimation (COCOMO, FPA, COSMIC, PERT) & Risk Management (M4),
+    and McCall Software Quality Assurance (M5).
 """
 
 import io
@@ -36,7 +38,7 @@ def generate_consolidated_csv(report_data: Dict[str, Any]) -> str:
     writer.writerow(["Generated At", datetime.now().strftime("%Y-%m-%d %H:%M:%S")])
     writer.writerow(["Syllabus Mapping", "VTU 24CS51 Software Engineering & Project Management"])
     writer.writerow([])
-    writer.writerow(["--- PROJECT SETUP ---"])
+    writer.writerow(["--- 1. PROJECT SETUP & CONSTRAINTS (VTU MODULE 3) ---"])
     writer.writerow(["Project Name", proj.get("name", "N/A")])
     writer.writerow(["Description", proj.get("description", "N/A")])
     writer.writerow(["Team Size (Persons)", proj.get("team_size", 0)])
@@ -51,7 +53,7 @@ def generate_consolidated_csv(report_data: Dict[str, Any]) -> str:
 
     # 2. Process Model Advisor
     advisor = report_data.get("advisor", {})
-    writer.writerow(["--- PROCESS MODEL ADVISOR (VTU MODULE 1) ---"])
+    writer.writerow(["--- 2. PROCESS MODEL ADVISOR (VTU MODULE 1) ---"])
     writer.writerow(["Rank", "Model Name", "Score", "Percentage (%)", "Suitability"])
     ranked = advisor.get("ranked_models", [])
     for m in ranked:
@@ -64,25 +66,44 @@ def generate_consolidated_csv(report_data: Dict[str, Any]) -> str:
         ])
     writer.writerow([])
 
-    # 3. Effort Estimation (COCOMO & FP)
+    # 3. Agile Lab
+    agile = report_data.get("agile", {})
+    writer.writerow(["--- 3. AGILE LAB & SPRINT RELEASE PLAN (VTU MODULE 2) ---"])
+    writer.writerow(["Backlog Story Points", agile.get("total_story_points", "N/A")])
+    writer.writerow(["Team Velocity (Points/Sprint)", agile.get("team_velocity", "N/A")])
+    writer.writerow(["Sprint Length (Weeks)", agile.get("sprint_length_weeks", "N/A")])
+    writer.writerow(["Sprints Needed", agile.get("sprints_needed", "N/A")])
+    writer.writerow(["Total Calendar Days", agile.get("total_calendar_days", "N/A")])
+    writer.writerow(["Projected Release Date", agile.get("finish_date", "N/A")])
+    writer.writerow([])
+
+    # 4. Effort Estimation (COCOMO, FP, COSMIC, PERT)
     cocomo = report_data.get("cocomo", {})
     fp = report_data.get("fp", {})
-    writer.writerow(["--- EFFORT & SIZE ESTIMATION (VTU MODULE 3) ---"])
+    cosmic = report_data.get("cosmic", {})
+    pert = report_data.get("pert", {})
+    writer.writerow(["--- 4. EFFORT ESTIMATION & SIZING (VTU MODULE 4 & 5) ---"])
     writer.writerow(["Metric", "Value"])
     writer.writerow(["COCOMO Mode", cocomo.get("mode", "N/A")])
     writer.writerow(["Estimated KLOC", cocomo.get("kloc", "N/A")])
-    writer.writerow(["Effort (Person-Months)", cocomo.get("effort_pm", "N/A")])
-    writer.writerow(["Development Time (Months)", cocomo.get("duration_months", "N/A")])
+    writer.writerow(["COCOMO Effort (Person-Months)", cocomo.get("effort_pm", "N/A")])
+    writer.writerow(["Nominal Duration (Months)", cocomo.get("duration_months", "N/A")])
     writer.writerow(["Average Staffing (Persons)", cocomo.get("avg_staff", "N/A")])
-    writer.writerow(["Productivity (LOC/PM)", cocomo.get("productivity_loc_pm", "N/A")])
     writer.writerow(["Unadjusted Function Points (UFP)", fp.get("ufp", "N/A")])
-    writer.writerow(["Value Adjustment Factor (VAF)", fp.get("vaf", "N/A")])
     writer.writerow(["Adjusted Function Points (AFP)", fp.get("afp", "N/A")])
+    if cosmic:
+        writer.writerow(["COSMIC Function Points (CFP)", cosmic.get("total_cfp", "N/A")])
+        writer.writerow(["COSMIC Effort (Hours)", cosmic.get("total_effort_hours", "N/A")])
+        writer.writerow(["COSMIC Effort (Person-Months)", cosmic.get("total_effort_pm", "N/A")])
+    if pert:
+        writer.writerow(["PERT Expected Effort (Hours)", pert.get("total_expected", "N/A")])
+        writer.writerow(["PERT Combined Std Dev (Hours)", pert.get("combined_sd", "N/A")])
+        writer.writerow(["PERT 90% Range (Hours)", f"{pert.get('confidence_90_range', ('N/A', 'N/A'))}"])
     writer.writerow([])
 
-    # 4. Risk Register
+    # 5. Risk Register
     risks = report_data.get("risks", {})
-    writer.writerow(["--- RISK REGISTER & RMMM PLAN (VTU MODULE 4) ---"])
+    writer.writerow(["--- 5. RISK REGISTER & RMMM PLAN (VTU MODULE 4) ---"])
     writer.writerow(["Total Risks", risks.get("total_risks", 0)])
     writer.writerow(["Total Risk Exposure (Cost)", risks.get("total_exposure", 0.0)])
     writer.writerow(["Risk ID", "Category", "Description", "Probability", "Impact Cost", "Exposure", "Severity", "Mitigation"])
@@ -99,22 +120,30 @@ def generate_consolidated_csv(report_data: Dict[str, Any]) -> str:
         ])
     writer.writerow([])
 
-    # 5. Business Case
+    # 6. Business Case & Scenario Risk
     biz = report_data.get("business_case", {})
-    writer.writerow(["--- BUSINESS CASE & ECONOMIC FEASIBILITY (VTU MODULE 4) ---"])
+    scenario = report_data.get("scenario", {})
+    radr = report_data.get("radr", {})
+    writer.writerow(["--- 6. BUSINESS CASE & ECONOMIC FEASIBILITY (VTU MODULE 3) ---"])
     writer.writerow(["Metric", "Value"])
     writer.writerow(["Initial Investment", biz.get("initial_investment", 0)])
     writer.writerow(["Discount Rate (%)", biz.get("discount_rate_pct", 0)])
     writer.writerow(["Net Present Value (NPV)", biz.get("npv", 0)])
     writer.writerow(["Simple ROI (%)", biz.get("roi_pct", 0)])
-    writer.writerow(["Discounted ROI (%)", biz.get("discounted_roi_pct", 0)])
     writer.writerow(["Payback Period (Years)", biz.get("payback_period_years", "N/A")])
     writer.writerow(["Financial Viability", "VIABLE" if biz.get("is_financially_viable") else "UNVIABLE"])
+    if scenario:
+        writer.writerow(["Expected NPV (EMV)", scenario.get("expected_npv", "N/A")])
+        writer.writerow(["Expected ROI (%)", scenario.get("expected_roi_pct", "N/A")])
+        writer.writerow(["NPV Standard Deviation", scenario.get("npv_standard_deviation", "N/A")])
+    if radr:
+        writer.writerow(["RADR Adjusted Rate (%)", radr.get("adjusted_discount_rate_pct", "N/A")])
+        writer.writerow(["Risk-Adjusted NPV", radr.get("adjusted_npv", "N/A")])
     writer.writerow([])
 
-    # 6. Quality Scorecard
+    # 7. Quality Scorecard
     quality = report_data.get("quality", {})
-    writer.writerow(["--- MCCALL QUALITY SCORECARD (VTU MODULE 5) ---"])
+    writer.writerow(["--- 7. MCCALL QUALITY SCORECARD (VTU MODULE 5) ---"])
     writer.writerow(["Overall McCall Quality Index", f"{quality.get('overall_index', 0)} / 5.0"])
     writer.writerow(["Overall Compliance (%)", f"{quality.get('overall_percentage', 0)}%"])
     writer.writerow(["Factor", "Category", "Rating (1-5)"])
@@ -139,151 +168,153 @@ def generate_consolidated_pdf(report_data: Dict[str, Any]) -> bytes:
 
     styles = getSampleStyleSheet()
 
-    # Custom styling
     title_style = ParagraphStyle(
         "DocTitle",
         parent=styles["Heading1"],
-        fontSize=20,
-        leading=24,
+        fontSize=18,
+        leading=22,
         textColor=colors.HexColor("#0D47A1"),
-        spaceAfter=4,
+        spaceAfter=3,
     )
     subtitle_style = ParagraphStyle(
         "DocSubtitle",
         parent=styles["Normal"],
-        fontSize=10,
+        fontSize=9,
         textColor=colors.HexColor("#546E7A"),
-        spaceAfter=12,
+        spaceAfter=10,
     )
     h2_style = ParagraphStyle(
         "SectionHeading",
         parent=styles["Heading2"],
-        fontSize=13,
-        leading=16,
+        fontSize=11,
+        leading=14,
         textColor=colors.HexColor("#1565C0"),
-        spaceBefore=12,
-        spaceAfter=6,
+        spaceBefore=10,
+        spaceAfter=4,
     )
     body_style = ParagraphStyle(
         "BodyDark",
         parent=styles["Normal"],
-        fontSize=9,
-        leading=12,
-        textColor=colors.HexColor("#263238"),
-    )
-    badge_style = ParagraphStyle(
-        "BadgeText",
-        parent=styles["Normal"],
         fontSize=8,
-        textColor=colors.HexColor("#37474F"),
-        alignment=1,
+        leading=11,
+        textColor=colors.HexColor("#263238"),
     )
 
     elements = []
 
     # Title & Header
-    elements.append(Paragraph("ProcessCompass: Decision-Support Synthesis", title_style))
+    elements.append(Paragraph("ProcessCompass: Executive Decision-Support Synthesis", title_style))
     elements.append(
         Paragraph(
-            f"VTU 24CS51 Software Engineering & Project Management | Generated: {datetime.now().strftime('%d %b %Y, %H:%M')}",
+            f"VTU 24CS51 Software Engineering & Project Management &bull; Author: YUVAN HARSHAJ &bull; Generated: {datetime.now().strftime('%d %b %Y, %H:%M')}",
             subtitle_style,
         )
     )
-    elements.append(HRFlowable(width="100%", thickness=1.5, color=colors.HexColor("#0D47A1"), spaceAfter=10))
+    elements.append(HRFlowable(width="100%", thickness=1.5, color=colors.HexColor("#0D47A1"), spaceAfter=8))
 
     proj = report_data.get("project", {})
 
-    # Section 1: Project Information
-    elements.append(Paragraph("1. Project Specification & Environment", h2_style))
+    # 1. Project Profile (M3)
+    elements.append(Paragraph("1. Project Specification & Scope Constraints (VTU Module 3 - CO3)", h2_style))
     proj_table_data = [
         [
-            Paragraph("<b>Project Name:</b>", body_style),
+            Paragraph("<b>Project:</b>", body_style),
             Paragraph(str(proj.get("name", "N/A")), body_style),
-            Paragraph("<b>Target Budget:</b>", body_style),
-            Paragraph(f"${float(proj.get('budget', 0)):,.2f}", body_style),
+            Paragraph("<b>Budget:</b>", body_style),
+            Paragraph(f"${float(proj.get('budget', 0)):,.0f}", body_style),
         ],
         [
             Paragraph("<b>Team Size:</b>", body_style),
-            Paragraph(f"{proj.get('team_size', 0)} engineers", body_style),
-            Paragraph("<b>Planned Duration:</b>", body_style),
-            Paragraph(f"{proj.get('duration', 0)} months", body_style),
+            Paragraph(f"{proj.get('team_size', 0)} Engineers", body_style),
+            Paragraph("<b>Duration:</b>", body_style),
+            Paragraph(f"{proj.get('duration', 0)} Months", body_style),
         ],
         [
             Paragraph("<b>Req Stability:</b>", body_style),
             Paragraph(str(proj.get("req_stability", "Medium")), body_style),
-            Paragraph("<b>Customer Involvement:</b>", body_style),
+            Paragraph("<b>Customer Involv.:</b>", body_style),
             Paragraph(str(proj.get("customer_involvement", "Medium")), body_style),
         ],
-        [
-            Paragraph("<b>Risk Level:</b>", body_style),
-            Paragraph(str(proj.get("risk_level", "Medium")), body_style),
-            Paragraph("<b>Need for Early Delivery:</b>", body_style),
-            Paragraph(str(proj.get("early_delivery", "Medium")), body_style),
-        ],
     ]
-    t_proj = Table(proj_table_data, colWidths=[100, 165, 110, 165])
+    t_proj = Table(proj_table_data, colWidths=[90, 180, 90, 180])
     t_proj.setStyle(TableStyle([
-        ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#F0F4F8")),
+        ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#F1F5F9")),
         ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#CFD8DC")),
-        ("PADDING", (0, 0), (-1, -1), 4),
+        ("PADDING", (0, 0), (-1, -1), 3),
     ]))
     elements.append(t_proj)
-    elements.append(Spacer(1, 10))
 
-    # Section 2: Process Model Advisor
-    elements.append(Paragraph("2. Process Model Recommendation (VTU Module 1)", h2_style))
+    # 2. Process Model Advisor (M1)
+    elements.append(Paragraph("2. Process Model Recommendation (VTU Module 1 - CO1)", h2_style))
     advisor = report_data.get("advisor", {})
     ranked = advisor.get("ranked_models", [])
 
-    model_rows = [["Rank", "Lifecycle Model", "Alignment %", "Suitability Rationale"]]
-    for m in ranked[:5]:
+    model_rows = [["Rank", "Lifecycle Model", "Match %", "Suitability Rationale"]]
+    for m in ranked[:4]:
         model_rows.append([
             str(m.get("rank")),
             m.get("model_name"),
             f"{m.get('percentage')}%",
-            Paragraph(m.get("justification", "")[:130] + "...", body_style),
+            Paragraph(m.get("justification", "")[:120] + "...", body_style),
         ])
-    t_models = Table(model_rows, colWidths=[35, 120, 75, 310])
+    t_models = Table(model_rows, colWidths=[35, 120, 65, 320])
     t_models.setStyle(TableStyle([
         ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#1565C0")),
         ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
         ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
         ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#B0BEC5")),
-        ("PADDING", (0, 0), (-1, -1), 4),
-        ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.HexColor("#F7F9FA")]),
+        ("PADDING", (0, 0), (-1, -1), 3),
+        ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.HexColor("#F8FAFC")]),
     ]))
     elements.append(t_models)
-    elements.append(Spacer(1, 10))
 
-    # Section 3: Effort & Size Estimation (COCOMO & FP)
-    elements.append(Paragraph("3. Effort & Size Estimation (VTU Module 3 - Boehm & Albrecht)", h2_style))
+    # 3. Agile Lab & Sprint Release (M2)
+    agile = report_data.get("agile", {})
+    elements.append(Paragraph("3. Agile Lab & Sprint Release Schedule (VTU Module 2 - CO2)", h2_style))
+    agile_rows = [
+        ["Backlog Story Points", f"{agile.get('total_story_points', 0)} pts", "Sprints Needed", f"{agile.get('sprints_needed', 0)} Sprints"],
+        ["Team Velocity", f"{agile.get('team_velocity', 0)} pts / sprint", "Projected Release", str(agile.get("finish_date", "N/A"))],
+    ]
+    t_agile = Table(agile_rows, colWidths=[135, 135, 135, 135])
+    t_agile.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (0, -1), colors.HexColor("#EDE7F6")),
+        ("BACKGROUND", (2, 0), (2, -1), colors.HexColor("#EDE7F6")),
+        ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#D1C4E9")),
+        ("PADDING", (0, 0), (-1, -1), 3),
+        ("FONTNAME", (0, 0), (0, -1), "Helvetica-Bold"),
+        ("FONTNAME", (2, 0), (2, -1), "Helvetica-Bold"),
+    ]))
+    elements.append(t_agile)
+
+    # 4. Effort Estimation (M4 & M5)
+    elements.append(Paragraph("4. Effort Estimation (VTU Module 4 & 5 - CO4)", h2_style))
     cocomo = report_data.get("cocomo", {})
     fp = report_data.get("fp", {})
+    cosmic = report_data.get("cosmic", {})
+    pert = report_data.get("pert", {})
 
     est_data = [
-        ["COCOMO Mode", str(cocomo.get("mode", "N/A")).title(), "Unadjusted FP (UFP)", f"{fp.get('ufp', 0):.1f}"],
-        ["Project Size", f"{cocomo.get('kloc', 0):.2f} KLOC", "Value Adjustment (VAF)", f"{fp.get('vaf', 1.0):.4f}"],
-        ["Effort (Person-Months)", f"{cocomo.get('effort_pm', 0):.2f} PM", "Adjusted FP (AFP)", f"{fp.get('afp', 0):.1f}"],
-        ["Nominal Duration", f"{cocomo.get('duration_months', 0):.2f} Months", "Average Staff Size", f"{cocomo.get('avg_staff', 0):.2f} Staff"],
+        ["COCOMO Mode & Size", f"{str(cocomo.get('mode', 'N/A')).title()} ({cocomo.get('kloc', 0):.1f} KLOC)", "COCOMO Effort / Time", f"{cocomo.get('effort_pm', 0):.1f} PM / {cocomo.get('duration_months', 0):.1f} Mos"],
+        ["Function Points (UFP / AFP)", f"{fp.get('ufp', 0):.0f} UFP / {fp.get('afp', 0):.1f} AFP", "COSMIC Size & Effort", f"{cosmic.get('total_cfp', 0)} CFP ({cosmic.get('total_effort_pm', 0):.1f} PM)"],
+        ["PERT Expected Effort", f"{pert.get('total_expected', 0):.1f} Hours", "PERT 90% Confidence", f"{pert.get('confidence_90_range', (0,0))[0]:.0f} – {pert.get('confidence_90_range', (0,0))[1]:.0f} Hrs"],
     ]
-    t_est = Table(est_data, colWidths=[130, 135, 135, 140])
+    t_est = Table(est_data, colWidths=[140, 130, 140, 130])
     t_est.setStyle(TableStyle([
         ("BACKGROUND", (0, 0), (0, -1), colors.HexColor("#ECEFF1")),
         ("BACKGROUND", (2, 0), (2, -1), colors.HexColor("#ECEFF1")),
         ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#CFD8DC")),
-        ("PADDING", (0, 0), (-1, -1), 4),
+        ("PADDING", (0, 0), (-1, -1), 3),
         ("FONTNAME", (0, 0), (0, -1), "Helvetica-Bold"),
         ("FONTNAME", (2, 0), (2, -1), "Helvetica-Bold"),
     ]))
     elements.append(t_est)
-    elements.append(Spacer(1, 10))
 
-    # Section 4: Risk Register
-    elements.append(Paragraph("4. Risk Register & Exposure Analysis (VTU Module 4 - RMMM)", h2_style))
+    # 5. Risk Register (M4)
+    elements.append(Paragraph("5. Risk Register & Prioritization (VTU Module 4 - CO4)", h2_style))
     risks = report_data.get("risks", {})
-    ranked_risks = risks.get("ranked_risks", [])[:4]
+    ranked_risks = risks.get("ranked_risks", [])[:3]
 
-    risk_rows = [["ID", "Category", "Prob (P)", "Impact ($)", "Exposure (RE)", "Mitigation Strategy"]]
+    risk_rows = [["ID", "Category", "P", "Impact ($)", "Exposure ($)", "Mitigation Plan"]]
     for r in ranked_risks:
         risk_rows.append([
             r.get("id"),
@@ -291,50 +322,51 @@ def generate_consolidated_pdf(report_data: Dict[str, Any]) -> bytes:
             f"{r.get('probability'):.2f}",
             f"${r.get('impact_cost'):,.0f}",
             f"${r.get('exposure'):,.0f}",
-            Paragraph(r.get("mitigation", "")[:90], body_style),
+            Paragraph(r.get("mitigation", "")[:80], body_style),
         ])
     if not ranked_risks:
-        risk_rows.append(["-", "None recorded", "-", "-", "-", "No risks registered."])
+        risk_rows.append(["-", "No risks logged", "-", "-", "-", "-"])
 
-    t_risks = Table(risk_rows, colWidths=[35, 105, 55, 65, 75, 205])
+    t_risks = Table(risk_rows, colWidths=[35, 110, 35, 60, 70, 230])
     t_risks.setStyle(TableStyle([
         ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#37474F")),
         ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
         ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
         ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#B0BEC5")),
-        ("PADDING", (0, 0), (-1, -1), 4),
+        ("PADDING", (0, 0), (-1, -1), 3),
     ]))
     elements.append(t_risks)
-    elements.append(Spacer(1, 10))
 
-    # Section 5: Economic Feasibility
-    elements.append(Paragraph("5. Economic Feasibility & Cost-Benefit (VTU Module 4)", h2_style))
+    # 6. Business Case, Scenario Risk & RADR (M3)
+    elements.append(Paragraph("6. Business Case & Scenario Risk Evaluation (VTU Module 3 - CO3)", h2_style))
     biz = report_data.get("business_case", {})
+    scenario = report_data.get("scenario", {})
+    radr = report_data.get("radr", {})
+
     biz_rows = [
-        ["Initial Investment", f"${biz.get('initial_investment', 0):,.2f}", "Net Present Value (NPV)", f"${biz.get('npv', 0):,.2f}"],
-        ["Discount Rate", f"{biz.get('discount_rate_pct', 0)}%", "Return on Investment (ROI)", f"{biz.get('roi_pct', 0):.2f}%"],
-        ["Payback Period", f"{biz.get('payback_period_years', 'N/A')} yrs", "Financial Status", "VIABLE" if biz.get("is_financially_viable") else "UNVIABLE"],
+        ["Net Present Value (NPV)", f"${biz.get('npv', 0):,.2f}", "Expected NPV (EMV)", f"${scenario.get('expected_npv', 0):,.2f}"],
+        ["Simple ROI / Payback", f"{biz.get('roi_pct', 0):.1f}% / {biz.get('payback_period_years', 'N/A')} yrs", "NPV Standard Deviation", f"±${scenario.get('npv_standard_deviation', 0):,.2f}"],
+        ["Base Hurdle Rate", f"{biz.get('discount_rate_pct', 0)}%", "RADR Adjusted Rate & NPV", f"{radr.get('adjusted_discount_rate_pct', 0):.1f}% (${radr.get('adjusted_npv', 0):,.0f})"],
     ]
-    t_biz = Table(biz_rows, colWidths=[130, 135, 135, 140])
+    t_biz = Table(biz_rows, colWidths=[140, 130, 140, 130])
     t_biz.setStyle(TableStyle([
         ("BACKGROUND", (0, 0), (0, -1), colors.HexColor("#E8F5E9")),
         ("BACKGROUND", (2, 0), (2, -1), colors.HexColor("#E8F5E9")),
         ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#C8E6C9")),
-        ("PADDING", (0, 0), (-1, -1), 4),
+        ("PADDING", (0, 0), (-1, -1), 3),
         ("FONTNAME", (0, 0), (0, -1), "Helvetica-Bold"),
         ("FONTNAME", (2, 0), (2, -1), "Helvetica-Bold"),
     ]))
     elements.append(t_biz)
-    elements.append(Spacer(1, 10))
 
-    # Section 6: McCall Quality Scorecard
-    elements.append(Paragraph("6. McCall Quality Scorecard (VTU Module 5 - SQA)", h2_style))
+    # 7. Quality Scorecard (M5)
+    elements.append(Paragraph("7. McCall's Software Quality Scorecard (VTU Module 5 - CO5)", h2_style))
     quality = report_data.get("quality", {})
     mqi_score = quality.get("overall_index", 0.0)
     mqi_pct = quality.get("overall_percentage", 0.0)
 
     cats = quality.get("categories", {})
-    q_rows = [["Quality Pillar", "Pillar Average (1-5)", "Compliance %", "Status"]]
+    q_rows = [["Quality Pillar", "Pillar Average (1-5)", "Compliance %", "Audit Status"]]
     for c_name, c_info in cats.items():
         q_rows.append([
             c_name,
@@ -349,13 +381,13 @@ def generate_consolidated_pdf(report_data: Dict[str, Any]) -> bytes:
         quality.get("sqa_verdict", "N/A")[:30],
     ])
 
-    t_qual = Table(q_rows, colWidths=[180, 120, 100, 140])
+    t_qual = Table(q_rows, colWidths=[180, 110, 100, 150])
     t_qual.setStyle(TableStyle([
         ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#00695C")),
         ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
         ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
         ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#B2DFDB")),
-        ("PADDING", (0, 0), (-1, -1), 4),
+        ("PADDING", (0, 0), (-1, -1), 3),
         ("BACKGROUND", (0, -1), (-1, -1), colors.HexColor("#E0F2F1")),
         ("FONTNAME", (0, -1), (-1, -1), "Helvetica-Bold"),
     ]))
@@ -364,4 +396,3 @@ def generate_consolidated_pdf(report_data: Dict[str, Any]) -> bytes:
     doc.build(elements)
     pdf_buffer.seek(0)
     return pdf_buffer.getvalue()
-
