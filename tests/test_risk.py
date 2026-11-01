@@ -44,3 +44,4 @@ def test_risk_severity_classification():
 
     sev_low = classify_severity(0.1, 5000, 100000)
     assert sev_low == "Low"
+

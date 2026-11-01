@@ -173,3 +173,4 @@ def analyze_risk_register(risks: List[Dict[str, Any]]) -> RiskRegisterSummary:
         ranked_risks=processed_items,
         matrix_grid=matrix_grid,
     )
+

@@ -62,3 +62,4 @@ def test_consolidated_report_generation():
     pdf_bytes = generate_consolidated_pdf(bundle)
     assert len(pdf_bytes) > 1000
     assert pdf_bytes.startswith(b"%PDF")
+

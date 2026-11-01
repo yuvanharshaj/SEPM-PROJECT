@@ -69,3 +69,4 @@ def test_cocomo_to_dict():
     assert "effort_pm" in d
     assert "duration_months" in d
     assert "avg_staff" in d
+

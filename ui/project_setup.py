@@ -222,3 +222,4 @@ def render_project_setup_page():
                 st.session_state.current_project = db.get_project_by_id(all_projects[0]["id"])
                 st.warning(f"Project '{active['name']}' deleted.")
                 st.rerun()
+

@@ -52,3 +52,4 @@ def test_validation_errors():
 
     with pytest.raises(ValueError, match="Must provide at least one year"):
         evaluate_business_case(initial_investment=1000.0, annual_benefits=[])
+

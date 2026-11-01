@@ -236,3 +236,4 @@ SAMPLE_PROJECTS: List[Dict[str, Any]] = [
         },
     },
 ]
+

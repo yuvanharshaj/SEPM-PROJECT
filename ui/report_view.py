@@ -180,3 +180,4 @@ def render_report_page():
         for cat, c_res in qual_res.categories.items()
     ]
     st.dataframe(pd.DataFrame(q_data), use_container_width=True, hide_index=True)
+

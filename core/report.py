@@ -364,3 +364,4 @@ def generate_consolidated_pdf(report_data: Dict[str, Any]) -> bytes:
     doc.build(elements)
     pdf_buffer.seek(0)
     return pdf_buffer.getvalue()
+

@@ -160,3 +160,4 @@ def render_business_case_page():
         }
         db.save_complete_project(active)
         st.success("Business case projections saved to SQLite!")
+

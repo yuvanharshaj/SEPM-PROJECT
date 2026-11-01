@@ -72,3 +72,4 @@ def test_gsc_validation_errors():
     # Out-of-range rating (> 5)
     with pytest.raises(ValueError, match="must be 0-5"):
         calculate_function_points(comps, [3] * 13 + [6])
+

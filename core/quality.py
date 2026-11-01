@@ -154,3 +154,4 @@ def evaluate_quality_scorecard(ratings: Dict[str, float | int]) -> QualityScorec
         areas_for_improvement=weaknesses,
         sqa_verdict=verdict,
     )
+

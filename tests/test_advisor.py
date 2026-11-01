@@ -75,3 +75,4 @@ def test_custom_weights_effect():
     res_skewed = evaluate_models(profile, custom_weights={"early_delivery": 10.0})
 
     assert res_skewed.top_model.score > res_default.top_model.score
+

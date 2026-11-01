@@ -111,3 +111,4 @@ def render_page_header(title: str, subtitle: str, module_tag: str, co_tag: str):
         """,
         unsafe_allow_html=True,
     )
+

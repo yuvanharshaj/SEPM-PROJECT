@@ -75,3 +75,4 @@ def test_db_delete(temp_db):
     assert deleted is True
 
     assert temp_db.get_project_by_id(pid) is None
+

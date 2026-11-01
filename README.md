@@ -366,7 +366,7 @@ python -m pytest tests/ -v
 
 ## 👤 Author
 
-**Yuvan Harsha J**  
+**YUVAN HARSHAJ**  
 Department of Computer Science & Engineering  
 Visvesvaraya Technological University (VTU)  
 Course: **24CS51 - Software Engineering & Project Management**
@@ -376,3 +376,4 @@ Course: **24CS51 - Software Engineering & Project Management**
 ## 📄 License
 
 This project is licensed under the **MIT License** - see the [LICENSE](LICENSE) file for complete details.
+

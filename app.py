@@ -1,7 +1,7 @@
 """ProcessCompass: Decision-Support Tool for Software Engineering & Project Management.
 
 VTU 24CS51 Software Engineering & Project Management.
-Author: Yuvan Harsha J
+Author: YUVAN HARSHAJ
 Stack: Python, Streamlit, SQLite, Plotly, ReportLab, pytest.
 """
 

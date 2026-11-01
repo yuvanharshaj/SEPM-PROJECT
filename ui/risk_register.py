@@ -188,3 +188,4 @@ def render_risk_register_page():
         ))
         fig_heat.update_layout(height=280, margin=dict(l=20, r=20, t=30, b=20))
         st.plotly_chart(fig_heat, use_container_width=True)
+

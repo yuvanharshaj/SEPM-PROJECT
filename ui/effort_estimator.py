@@ -225,3 +225,4 @@ def render_effort_estimator_page():
                 db.save_complete_project(active)
                 st.success(f"Updated Project KLOC to {target_kloc:.2f} KLOC and saved FPA configuration!")
                 st.rerun()
+

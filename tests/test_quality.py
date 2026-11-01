@@ -37,3 +37,4 @@ def test_quality_clamping_and_verdicts():
     res_low = evaluate_quality_scorecard(ratings_low)
     assert math.isclose(res_low.overall_index, 1.0, rel_tol=1e-5)
     assert "Grade C" in res_low.sqa_verdict
+

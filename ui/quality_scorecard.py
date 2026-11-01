@@ -137,3 +137,4 @@ def render_quality_scorecard_page():
         active["quality_scores"] = user_ratings
         db.save_complete_project(active)
         st.success("McCall Quality scores saved to SQLite!")
+

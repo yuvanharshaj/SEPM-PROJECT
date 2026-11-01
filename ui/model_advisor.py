@@ -116,3 +116,4 @@ def render_model_advisor_page():
                     st.markdown("**Friction Points:**")
                     for d in m.drawbacks:
                         st.markdown(f"- ⚠️ {d}")
+

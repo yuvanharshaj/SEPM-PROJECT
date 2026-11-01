@@ -327,3 +327,4 @@ class DatabaseManager:
         from sample_data.samples import SAMPLE_PROJECTS
         for sample in SAMPLE_PROJECTS:
             self.save_complete_project(sample)
+

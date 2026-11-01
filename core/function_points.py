@@ -166,3 +166,4 @@ def fp_to_kloc(afp: float, language: str = "Python") -> float:
         raise ValueError(f"AFP cannot be negative: {afp}")
     factor = LANGUAGE_LOC_FACTORS.get(language, 53)
     return (afp * factor) / 1000.0
+
