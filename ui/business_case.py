@@ -10,29 +10,38 @@ from core.business_case import (
     evaluate_scenario_risk,
     evaluate_radr,
 )
-from ui.components import render_page_header
+from ui.theme import render_page_header, render_kpi_card, render_empty_state_html, apply_plotly_theme
+from ui.format import format_currency, get_currency_symbol
 from db.database import DatabaseManager
 
 
 def render_business_case_page():
     render_page_header(
         title="Project Business Case & Economic Feasibility",
-        subtitle="Evaluate project financial viability using Discounted Cash Flows, NPV, ROI, Payback, and Scenario Risk Evaluation.",
-        module_tag="VTU 24CS51: Module 3 (Project Evaluation & Cost-Benefit)",
-        co_tag="CO3: Analyze Economic Feasibility & Forecast Project Cash Flows",
+        subtitle="Evaluate project financial viability using Discounted Cash Flows, NPV, ROI, Payback, and Scenario Risk Analysis.",
+        module_tag="VTU 24CS51: Module 3",
+        co_tag="CO3: Analyze Economic Feasibility & Project Cash Flows",
     )
 
     active = st.session_state.get("current_project")
     if not active:
-        st.warning("Please select or initialize a project in 'Project Setup' first.")
+        st.markdown(
+            render_empty_state_html(
+                icon="💰",
+                title="No Active Project Selected",
+                description="Please select or configure a project benchmark in 'Project Setup' to view economic feasibility.",
+            ),
+            unsafe_allow_html=True,
+        )
         return
 
     db: DatabaseManager = st.session_state.db
+    sym = get_currency_symbol()
 
     saved_biz = active.get("business_case") or {
-        "initial_investment": float(active.get("budget", 60000.0)),
-        "annual_benefits": [30000.0, 45000.0, 55000.0, 65000.0, 75000.0],
-        "annual_costs": [8000.0, 9000.0, 10000.0, 10000.0, 11000.0],
+        "initial_investment": float(active.get("budget", 5000000.0)),
+        "annual_benefits": [2000000.0, 3000000.0, 4000000.0, 4800000.0, 5500000.0],
+        "annual_costs": [500000.0, 600000.0, 700000.0, 750000.0, 800000.0],
         "discount_rate_pct": 10.0,
     }
 
@@ -46,15 +55,15 @@ def render_business_case_page():
     # TAB A: BASE CAPITAL BUDGETING
     # -----------------------------------------------------------------
     with tab_nominal:
-        st.markdown("### 💰 Financial Parameters")
+        st.markdown("### 💰 Capital Budgeting Parameters")
 
         col_p1, col_p2 = st.columns([1, 1])
         with col_p1:
             initial_inv = st.number_input(
-                "Initial Capital Investment ($ / ₹):",
+                f"Initial Capital Investment ({sym}):",
                 min_value=1000.0,
-                value=float(saved_biz.get("initial_investment", 60000.0)),
-                step=5000.0,
+                value=float(saved_biz.get("initial_investment", 5000000.0)),
+                step=100000.0,
                 help="Upfront development and procurement costs incurred in Year 0",
             )
         with col_p2:
@@ -64,14 +73,14 @@ def render_business_case_page():
                 max_value=25.0,
                 value=float(saved_biz.get("discount_rate_pct", 10.0)),
                 step=0.5,
-                help="Annual opportunity cost of capital or required rate of return",
+                help="Annual opportunity cost of capital or hurdle rate",
             )
 
         st.markdown("#### 📅 5-Year Cash Flow Projections")
         st.caption("Forecast anticipated revenue/savings (Benefits) and operational maintenance (Recurring Costs):")
 
-        default_benefits = saved_biz.get("annual_benefits", [30000.0] * 5)
-        default_costs = saved_biz.get("annual_costs", [8000.0] * 5)
+        default_benefits = saved_biz.get("annual_benefits", [2000000.0] * 5)
+        default_costs = saved_biz.get("annual_costs", [500000.0] * 5)
 
         year_cols = st.columns(5)
         user_benefits = []
@@ -80,11 +89,11 @@ def render_business_case_page():
         for yr in range(1, 6):
             with year_cols[yr - 1]:
                 st.markdown(f"**Year {yr}**")
-                b_val = default_benefits[yr - 1] if yr - 1 < len(default_benefits) else 30000.0
-                c_val = default_costs[yr - 1] if yr - 1 < len(default_costs) else 8000.0
+                b_val = default_benefits[yr - 1] if yr - 1 < len(default_benefits) else 2000000.0
+                c_val = default_costs[yr - 1] if yr - 1 < len(default_costs) else 500000.0
 
-                b_input = st.number_input(f"Benefit Y{yr}", min_value=0.0, value=float(b_val), step=2000.0, key=f"ben_{yr}")
-                c_input = st.number_input(f"Cost Y{yr}", min_value=0.0, value=float(c_val), step=1000.0, key=f"cost_{yr}")
+                b_input = st.number_input(f"Benefit Y{yr}", min_value=0.0, value=float(b_val), step=100000.0, key=f"ben_{yr}")
+                c_input = st.number_input(f"Cost Y{yr}", min_value=0.0, value=float(c_val), step=50000.0, key=f"cost_{yr}")
                 user_benefits.append(b_input)
                 user_costs.append(c_input)
 
@@ -95,19 +104,61 @@ def render_business_case_page():
             discount_rate_pct=discount_rate,
         )
 
-        st.markdown("---")
+        st.markdown("<div style='height: 12px;'></div>", unsafe_allow_html=True)
 
-        m1, m2, m3, m4 = st.columns(4)
-        with m1:
-            st.metric("Net Present Value (NPV)", f"${biz_result.npv:,.2f}", delta=f"{biz_result.discounted_roi_pct:.1f}% Disc ROI")
-        with m2:
-            st.metric("Simple ROI", f"{biz_result.roi_pct:.1f}%", help="Total Net Benefit / Initial Investment")
-        with m3:
+        # 3 Large KPI Cards (NPV, ROI, Payback) + Total Profit
+        m_cols = st.columns(4)
+        with m_cols[0]:
+            st.markdown(
+                render_kpi_card(
+                    label="Net Present Value (NPV)",
+                    value=format_currency(biz_result.npv, compact=True),
+                    subtitle=f"{biz_result.discounted_roi_pct:.1f}% Discounted ROI",
+                    delta=f"{biz_result.discounted_roi_pct:.1f}%",
+                    delta_type="up" if biz_result.npv > 0 else "down",
+                    icon="💎",
+                    accent_color="#2563EB" if biz_result.npv > 0 else "#EF4444",
+                ),
+                unsafe_allow_html=True,
+            )
+        with m_cols[1]:
+            st.markdown(
+                render_kpi_card(
+                    label="Simple Return on Invest",
+                    value=f"{biz_result.roi_pct:.1f}%",
+                    subtitle="Net Profit / Capex",
+                    delta=f"{biz_result.roi_pct:.1f}%",
+                    delta_type="up" if biz_result.roi_pct > 0 else "down",
+                    icon="📈",
+                    accent_color="#0D9488",
+                ),
+                unsafe_allow_html=True,
+            )
+        with m_cols[2]:
             pb_str = f"{biz_result.payback_period_years:.2f} Yrs" if biz_result.payback_period_years else "Unrecovered"
-            st.metric("Payback Period", pb_str, help="Time to recover initial capital investment")
-        with m4:
-            st.metric("Total Net Profit", f"${biz_result.net_profit:,.2f}")
+            st.markdown(
+                render_kpi_card(
+                    label="Payback Period",
+                    value=pb_str,
+                    subtitle="Capital Recovery Horizon",
+                    icon="⏱️",
+                    accent_color="#10B981" if biz_result.payback_period_years and biz_result.payback_period_years <= 3.0 else "#F59E0B",
+                ),
+                unsafe_allow_html=True,
+            )
+        with m_cols[3]:
+            st.markdown(
+                render_kpi_card(
+                    label="Total Net Profit",
+                    value=format_currency(biz_result.net_profit, compact=True),
+                    subtitle=format_currency(biz_result.net_profit, compact=False, precision=0),
+                    icon="💰",
+                    accent_color="#8B5CF6",
+                ),
+                unsafe_allow_html=True,
+            )
 
+        st.markdown("<div style='height: 10px;'></div>", unsafe_allow_html=True)
         if biz_result.is_financially_viable:
             st.success(f"✅ **{biz_result.summary_verdict}**")
         else:
@@ -122,7 +173,7 @@ def render_business_case_page():
             x=[f"Year {y}" for y in df_flows["year"]],
             y=df_flows["net_cash_flow"],
             name="Annual Net Flow",
-            marker_color=["#EF5350" if val < 0 else "#66BB6A" for val in df_flows["net_cash_flow"]],
+            marker_color=["#EF4444" if val < 0 else "#10B981" for val in df_flows["net_cash_flow"]],
         ))
 
         fig_cf.add_trace(go.Scatter(
@@ -130,7 +181,8 @@ def render_business_case_page():
             y=df_flows["cumulative_cash_flow"],
             mode="lines+markers",
             name="Cumulative Cash Flow (Undiscounted)",
-            line=dict(color="#1976D2", width=3),
+            line=dict(color="#2563EB", width=3),
+            marker=dict(size=7),
         ))
 
         fig_cf.add_trace(go.Scatter(
@@ -138,19 +190,35 @@ def render_business_case_page():
             y=df_flows["cumulative_discounted"],
             mode="lines+markers",
             name="Cumulative Discounted (NPV Trajectory)",
-            line=dict(color="#7B1FA2", width=2, dash="dash"),
+            line=dict(color="#8B5CF6", width=2, dash="dash"),
+            marker=dict(size=7),
         ))
 
-        fig_cf.add_hline(y=0, line_dash="dot", line_color="#37474F", annotation_text="Break-Even Threshold ($0)")
+        fig_cf.add_hline(y=0, line_dash="dot", line_color="#64748B", annotation_text=f"Break-Even Threshold ({sym}0)")
 
-        fig_cf.update_layout(
-            title="Cash Flow Forecast & Capital Recovery",
-            yaxis_title="Amount ($ / ₹)",
-            xaxis_title="Timeline",
-            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
-            height=380,
-            margin=dict(l=20, r=20, t=40, b=20),
+        # Callout dot at payback / break-even if available
+        if biz_result.payback_period_years:
+            pb_year_label = f"Year {min(5, int(biz_result.payback_period_years) + 1)}"
+            fig_cf.add_annotation(
+                x=pb_year_label,
+                y=0,
+                text=f"★ Break-Even: {biz_result.payback_period_years:.2f} Yrs",
+                showarrow=True,
+                arrowhead=2,
+                arrowcolor="#10B981",
+                font=dict(color="#10B981", size=11, family="'Plus Jakarta Sans', sans-serif"),
+                bgcolor="rgba(16, 185, 129, 0.1)",
+                bordercolor="#10B981",
+            )
+
+        fig_cf = apply_plotly_theme(
+            fig_cf,
+            title="Cash Flow Forecast & Capital Recovery Trajectory",
+            height=390,
+            show_legend=True,
         )
+        fig_cf.update_yaxes(title_text=f"Amount ({sym})")
+        fig_cf.update_xaxes(title_text="Project Lifecycle Timeline")
         st.plotly_chart(fig_cf, use_container_width=True)
 
         with st.expander("📋 Detailed Cash Flow Accounting Table"):
@@ -164,7 +232,7 @@ def render_business_case_page():
                 "discount_rate_pct": float(discount_rate),
             }
             db.save_complete_project(active)
-            st.success("Business case projections saved to SQLite!")
+            st.success("Business case projections saved to SQLite database!")
 
     # -----------------------------------------------------------------
     # TAB B: SCENARIO RISK EVALUATION (EXPECTED NPV / EMV)
@@ -172,9 +240,12 @@ def render_business_case_page():
     with tab_scenarios:
         st.markdown("### 🎲 Risk Evaluation via Scenario Modeling")
         st.markdown(
-            "Software investments face market and operational uncertainties. By weighting **Optimistic**, "
-            "**Most Likely**, and **Pessimistic** cash flow realizations by their assigned probabilities, "
-            "we compute the **Expected Monetary Value (EMV) / Expected NPV** and evaluate downside volatility."
+            "<div style='font-size: 0.9rem; color: var(--pc-text-muted); line-height: 1.5; margin-bottom: 12px;'>"
+            "Software investments face commercial and technical volatility. By weighting <b>Optimistic</b>, "
+            "<b>Most Likely</b>, and <b>Pessimistic</b> cash flow outcomes by assigned probabilities, "
+            "we compute the <b>Expected Monetary Value (EMV) / Expected NPV</b> and standard deviation."
+            "</div>",
+            unsafe_allow_html=True,
         )
         st.latex(r"E(\text{NPV}) = \sum_{i} p_i \cdot \text{NPV}_i, \quad \sigma(\text{NPV}) = \sqrt{\sum_{i} p_i \cdot (\text{NPV}_i - E(\text{NPV}))^2}")
 
@@ -195,39 +266,92 @@ def render_business_case_page():
             probabilities=(p_opt, p_likely, p_pess),
         )
 
-        sm1, sm2, sm3, sm4 = st.columns(4)
-        with sm1:
-            st.metric("Expected NPV (EMV)", f"${scenario_res.expected_npv:,.2f}", f"Nominal: ${biz_result.npv:,.2f}")
-        with sm2:
-            st.metric("Expected ROI", f"{scenario_res.expected_roi_pct:.1f}%")
-        with sm3:
-            st.metric("NPV Volatility (SD)", f"±${scenario_res.npv_standard_deviation:,.2f}")
-        with sm4:
-            st.metric("Probability Balance", f"{p_opt:.2f} / {p_likely:.2f} / {p_pess:.2f}")
+        st.markdown("<div style='height: 10px;'></div>", unsafe_allow_html=True)
+        sm_cols = st.columns(4)
+        with sm_cols[0]:
+            st.markdown(
+                render_kpi_card(
+                    label="Expected NPV (EMV)",
+                    value=format_currency(scenario_res.expected_npv, compact=True),
+                    subtitle=f"Nominal: {format_currency(biz_result.npv, compact=True)}",
+                    icon="🎯",
+                    accent_color="#2563EB",
+                ),
+                unsafe_allow_html=True,
+            )
+        with sm_cols[1]:
+            st.markdown(
+                render_kpi_card(
+                    label="Expected ROI",
+                    value=f"{scenario_res.expected_roi_pct:.1f}%",
+                    subtitle="Probability Weighted",
+                    icon="📈",
+                    accent_color="#0D9488",
+                ),
+                unsafe_allow_html=True,
+            )
+        with sm_cols[2]:
+            st.markdown(
+                render_kpi_card(
+                    label="NPV Volatility (σ)",
+                    value=f"±{format_currency(scenario_res.npv_standard_deviation, compact=True)}",
+                    subtitle="Standard Deviation",
+                    icon="📊",
+                    accent_color="#F59E0B",
+                ),
+                unsafe_allow_html=True,
+            )
+        with sm_cols[3]:
+            st.markdown(
+                render_kpi_card(
+                    label="Probability Split",
+                    value=f"{p_opt:.2f}/{p_likely:.2f}/{p_pess:.2f}",
+                    subtitle="Opt / Likely / Pess",
+                    icon="🎲",
+                    accent_color="#8B5CF6",
+                ),
+                unsafe_allow_html=True,
+            )
 
+        st.markdown("<div style='height: 12px;'></div>", unsafe_allow_html=True)
         st.info(f"**Risk Profile Assessment:** {scenario_res.risk_summary}")
 
-        df_sc = pd.DataFrame([s.to_dict() for s in scenario_res.scenarios]).rename(columns={
-            "name": "Scenario",
-            "probability": "Probability (p)",
-            "initial_investment": "Initial Capex ($)",
-            "npv": "Scenario NPV ($)",
-            "roi_pct": "ROI (%)",
-            "payback_years": "Payback (Yrs)",
-        })
-        st.dataframe(df_sc[["Scenario", "Probability (p)", "Initial Capex ($)", "Scenario NPV ($)", "ROI (%)", "Payback (Yrs)"]], use_container_width=True, hide_index=True)
+        df_sc = pd.DataFrame([
+            {
+                "Scenario": s.name,
+                "Probability (p)": f"{s.probability:.2f}",
+                f"Initial Capex ({sym})": format_currency(s.initial_investment, compact=False, precision=0),
+                f"Scenario NPV ({sym})": format_currency(s.npv, compact=False, precision=0),
+                "ROI (%)": f"{s.roi_pct:.1f}%",
+                "Payback (Yrs)": f"{s.payback_years:.2f}" if s.payback_years else "Unrecovered",
+            }
+            for s in scenario_res.scenarios
+        ])
+        st.dataframe(df_sc, use_container_width=True, hide_index=True)
 
+        # Bar chart of scenario NPVs
+        df_plot = pd.DataFrame([s.to_dict() for s in scenario_res.scenarios])
         fig_sc_bar = px.bar(
-            df_sc,
-            x="Scenario",
-            y="Scenario NPV ($)",
-            color="Scenario",
-            text="Scenario NPV ($)",
-            color_discrete_map={"Optimistic": "#43A047", "Most Likely": "#1E88E5", "Pessimistic": "#E53935"},
-            title="NPV Distribution Across Economic Scenarios",
+            df_plot,
+            x="name",
+            y="npv",
+            color="name",
+            color_discrete_map={"Optimistic": "#10B981", "Most Likely": "#2563EB", "Pessimistic": "#EF4444"},
         )
-        fig_sc_bar.add_hline(y=scenario_res.expected_npv, line_dash="dash", line_color="#7B1FA2", annotation_text=f"Expected NPV: ${scenario_res.expected_npv:,.0f}")
-        fig_sc_bar.update_layout(height=320, margin=dict(l=20, r=20, t=35, b=20))
+        fig_sc_bar.add_hline(
+            y=scenario_res.expected_npv,
+            line_dash="dash",
+            line_color="#8B5CF6",
+            annotation_text=f"Expected NPV: {format_currency(scenario_res.expected_npv, compact=True)}",
+        )
+        fig_sc_bar = apply_plotly_theme(
+            fig_sc_bar,
+            title="NPV Distribution Across Economic Scenarios",
+            height=320,
+            show_legend=False,
+        )
+        fig_sc_bar.update_xaxes(title_text="Scenario")
+        fig_sc_bar.update_yaxes(title_text=f"NPV ({sym})")
         st.plotly_chart(fig_sc_bar, use_container_width=True)
 
     # -----------------------------------------------------------------
@@ -236,14 +360,17 @@ def render_business_case_page():
     with tab_radr:
         st.markdown("### 📈 Risk-Adjusted Discount Rate (RADR)")
         st.markdown(
-            "Under the RADR approach, high-risk software initiatives require a higher **hurdle rate**. "
-            "A **risk premium** is added to the base cost of capital to reflect technological and execution risks."
+            "<div style='font-size: 0.9rem; color: var(--pc-text-muted); line-height: 1.5; margin-bottom: 12px;'>"
+            "Under the RADR approach, higher-risk software engineering initiatives require a higher <b>hurdle rate</b>. "
+            "A <b>risk premium</b> is added to the base cost of capital to reflect architectural and execution risks."
+            "</div>",
+            unsafe_allow_html=True,
         )
         st.latex(r"r_{\text{adjusted}} = r_{\text{base}} + r_{\text{risk\_premium}}, \quad \text{NPV}_{\text{RADR}} = -C_0 + \sum_{t=1}^N \frac{\text{NCF}_t}{(1 + r_{\text{adjusted}})^t}")
 
         r_col1, r_col2 = st.columns(2)
         with r_col1:
-            st.write(f"**Base Discount Rate:** `{discount_rate:.1f}%`")
+            st.markdown(f"**Base Discount Rate:** `{discount_rate:.1f}%`")
         with r_col2:
             risk_prem = st.slider("Risk Premium (%):", min_value=0.5, max_value=10.0, value=3.0, step=0.5, help="Extra risk margin added to hurdle rate")
 
@@ -255,16 +382,54 @@ def render_business_case_page():
             risk_premium_pct=risk_prem,
         )
 
-        rm1, rm2, rm3, rm4 = st.columns(4)
-        with rm1:
-            st.metric("Adjusted Hurdle Rate", f"{radr_res.adjusted_discount_rate_pct:.1f}%", f"+{risk_prem:.1f}% Premium")
-        with rm2:
-            st.metric("Base NPV", f"${radr_res.base_npv:,.2f}")
-        with rm3:
-            st.metric("Risk-Adjusted NPV", f"${radr_res.adjusted_npv:,.2f}", f"Delta: ${radr_res.npv_delta:,.2f}")
-        with rm4:
-            st.metric("RADR Payback", f"{radr_res.adjusted_payback:.2f} Yrs" if radr_res.adjusted_payback else "Exceeds Life")
+        st.markdown("<div style='height: 10px;'></div>", unsafe_allow_html=True)
+        rm_cols = st.columns(4)
+        with rm_cols[0]:
+            st.markdown(
+                render_kpi_card(
+                    label="Adjusted Hurdle Rate",
+                    value=f"{radr_res.adjusted_discount_rate_pct:.1f}%",
+                    subtitle=f"+{risk_prem:.1f}% Risk Margin",
+                    icon="📈",
+                    accent_color="#2563EB",
+                ),
+                unsafe_allow_html=True,
+            )
+        with rm_cols[1]:
+            st.markdown(
+                render_kpi_card(
+                    label="Base NPV",
+                    value=format_currency(radr_res.base_npv, compact=True),
+                    subtitle=f"At {discount_rate:.1f}% hurdle",
+                    icon="💎",
+                    accent_color="#0D9488",
+                ),
+                unsafe_allow_html=True,
+            )
+        with rm_cols[2]:
+            st.markdown(
+                render_kpi_card(
+                    label="Risk-Adjusted NPV",
+                    value=format_currency(radr_res.adjusted_npv, compact=True),
+                    subtitle=f"Penalty: -{format_currency(abs(radr_res.npv_delta), compact=True)}",
+                    icon="⚖️",
+                    accent_color="#F59E0B" if radr_res.adjusted_npv > 0 else "#EF4444",
+                ),
+                unsafe_allow_html=True,
+            )
+        with rm_cols[3]:
+            st.markdown(
+                render_kpi_card(
+                    label="Adjusted Payback",
+                    value=f"{radr_res.adjusted_payback:.2f} Yrs" if radr_res.adjusted_payback else "Exceeds Life",
+                    subtitle="Under Risk Premium",
+                    icon="⏱️",
+                    accent_color="#8B5CF6",
+                ),
+                unsafe_allow_html=True,
+            )
 
+        st.markdown("<div style='height: 12px;'></div>", unsafe_allow_html=True)
         if radr_res.is_viable_at_radr:
             st.success(f"✅ **{radr_res.summary}**")
         else:
