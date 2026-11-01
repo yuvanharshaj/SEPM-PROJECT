@@ -18,6 +18,7 @@ st.set_page_config(
 from ui.components import init_app_state, inject_custom_styles
 from ui.project_setup import render_project_setup_page
 from ui.model_advisor import render_model_advisor_page
+from ui.agile_lab import render_agile_lab_page
 from ui.effort_estimator import render_effort_estimator_page
 from ui.risk_register import render_risk_register_page
 from ui.business_case import render_business_case_page
@@ -65,6 +66,7 @@ def main():
     pages = {
         "⚙️ Project Setup": render_project_setup_page,
         "🧭 Process Model Advisor": render_model_advisor_page,
+        "⚡ Agile Lab": render_agile_lab_page,
         "📐 Effort Estimator": render_effort_estimator_page,
         "⚠️ Risk Register": render_risk_register_page,
         "💰 Business Case": render_business_case_page,
@@ -75,6 +77,7 @@ def main():
     page_slug_map = {
         "setup": "⚙️ Project Setup",
         "advisor": "🧭 Process Model Advisor",
+        "agile": "⚡ Agile Lab",
         "estimator": "📐 Effort Estimator",
         "risks": "⚠️ Risk Register",
         "business": "💰 Business Case",
@@ -99,10 +102,12 @@ def main():
         """
         <div style="font-size: 0.78rem; color: #64748B; line-height: 1.4;">
             <b>VTU Syllabus Alignment (24CS51):</b><br>
-            &bull; Mod 1: Process Models & Agile<br>
-            &bull; Mod 3: COCOMO & Function Points<br>
-            &bull; Mod 4: RMMM & Project Economics<br>
-            &bull; Mod 5: McCall Quality Assurance
+            &bull; M1: Process Model Advisor (CO1)<br>
+            &bull; M2: Agile Lab (CO2)<br>
+            &bull; M3: Setup & Business Case (CO3)<br>
+            &bull; M4: Estimation & Risk (CO4)<br>
+            &bull; M5: McCall Quality & Metrics (CO5)<br>
+            &bull; Synthesis: Consolidated Report (CO1–CO5)
         </div>
         """,
         unsafe_allow_html=True,
