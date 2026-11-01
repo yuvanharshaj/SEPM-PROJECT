@@ -13,7 +13,8 @@ from core.agile import calculate_sprint_plan
 from core.cosmic import calculate_cosmic_ffp
 from core.pert import calculate_pert
 from core.report import generate_consolidated_csv, generate_consolidated_pdf
-from ui.components import render_page_header
+from ui.theme import render_page_header, render_kpi_card, render_empty_state_html
+from ui.format import format_currency, get_currency_symbol, get_active_currency
 
 
 def render_report_page():
@@ -26,8 +27,18 @@ def render_report_page():
 
     active = st.session_state.get("current_project")
     if not active:
-        st.warning("Please select or initialize a project in 'Project Setup' first.")
+        st.markdown(
+            render_empty_state_html(
+                icon="📄",
+                title="No Active Project Selected",
+                description="Please select or configure a project benchmark in 'Project Setup' to generate a consolidated report.",
+            ),
+            unsafe_allow_html=True,
+        )
         return
+
+    curr = get_active_currency()
+    sym = get_currency_symbol(curr)
 
     # Gather data across all modules
     # 1. Advisor (M1)
@@ -72,14 +83,14 @@ def render_report_page():
 
     # 5. Business Case & Scenario Risk (M3)
     bc_data = active.get("business_case") or {
-        "initial_investment": float(active.get("budget", 60000.0)),
-        "annual_benefits": [30000.0, 45000.0, 55000.0, 65000.0, 75000.0],
-        "annual_costs": [8000.0, 9000.0, 10000.0, 10000.0, 11000.0],
+        "initial_investment": float(active.get("budget", 5000000.0)),
+        "annual_benefits": [2000000.0, 3000000.0, 4000000.0, 4800000.0, 5500000.0],
+        "annual_costs": [500000.0, 600000.0, 700000.0, 750000.0, 800000.0],
         "discount_rate_pct": 10.0,
     }
-    init_inv = float(bc_data.get("initial_investment", 60000.0))
-    ann_bens = bc_data.get("annual_benefits", [30000.0] * 5)
-    ann_costs = bc_data.get("annual_costs", [8000.0] * 5)
+    init_inv = float(bc_data.get("initial_investment", 5000000.0))
+    ann_bens = bc_data.get("annual_benefits", [2000000.0] * 5)
+    ann_costs = bc_data.get("annual_costs", [500000.0] * 5)
     disc_rate = float(bc_data.get("discount_rate_pct", 10.0))
 
     biz_res = evaluate_business_case(init_inv, ann_bens, ann_costs, disc_rate)
@@ -123,62 +134,129 @@ def render_report_page():
         "quality": qual_res.to_dict(),
     }
 
-    # Top Download Buttons
-    col_dl1, col_dl2, col_meta = st.columns([1.2, 1.2, 2.5])
+    # Generate documents with currency
+    pdf_bytes = generate_consolidated_pdf(report_bundle, currency=curr)
+    csv_text = generate_consolidated_csv(report_bundle, currency=curr)
+    proj_slug = active.get("name", "project").replace(" ", "_").lower()
+    pdf_kb = len(pdf_bytes) / 1024.0
+    csv_kb = len(csv_text.encode('utf-8')) / 1024.0
 
+    # Top Download Action Bar
+    st.markdown(
+        f"""
+        <div class="pc-card" style="background: linear-gradient(135deg, rgba(37, 99, 235, 0.05), rgba(13, 148, 136, 0.05)); border: 1px solid rgba(37, 99, 235, 0.2); padding: 18px 24px; margin-bottom: 20px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 16px;">
+                <div>
+                    <div style="font-size: 0.72rem; text-transform: uppercase; font-weight: 700; color: var(--pc-primary-dark, #1E40AF); letter-spacing: 0.05em;">Export Artifacts &bull; VTU 24CS51 Viva Defense</div>
+                    <div style="font-size: 1.2rem; font-weight: 800; color: var(--pc-text-main, #0F172A); margin-top: 2px;">
+                        {active.get('name')} Decision Synthesis Report
+                    </div>
+                    <div style="font-size: 0.8rem; color: var(--pc-text-muted, #64748B); margin-top: 2px;">
+                        Currency: <b>{curr} ({sym})</b> &bull; Ready for submission to evaluator committee
+                    </div>
+                </div>
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    col_dl1, col_dl2, col_meta = st.columns([1.3, 1.3, 2.0])
     with col_dl1:
-        pdf_bytes = generate_consolidated_pdf(report_bundle)
-        proj_slug = active.get("name", "project").replace(" ", "_").lower()
         st.download_button(
-            label="📥 Download PDF Summary",
+            label=f"📥 Download PDF Document ({pdf_kb:.1f} KB)",
             data=pdf_bytes,
             file_name=f"ProcessCompass_{proj_slug}_report.pdf",
             mime="application/pdf",
             type="primary",
             use_container_width=True,
         )
-
     with col_dl2:
-        csv_text = generate_consolidated_csv(report_bundle)
         st.download_button(
-            label="📊 Download CSV Data",
+            label=f"📊 Download Raw CSV ({csv_kb:.1f} KB)",
             data=csv_text,
             file_name=f"ProcessCompass_{proj_slug}_data.csv",
             mime="text/csv",
             use_container_width=True,
         )
-
     with col_meta:
-        st.caption("Ready for academic project evaluation & viva defense (VTU 24CS51).")
+        st.markdown(
+            f"<div style='font-size: 0.82rem; color: var(--pc-text-muted); padding-top: 6px;'>"
+            f"PDF includes DejaVu Sans TrueType typography with native <b>{sym}</b> currency glyphs and styling."
+            f"</div>",
+            unsafe_allow_html=True,
+        )
 
-    st.markdown("---")
+    st.markdown("<div style='height: 12px;'></div>", unsafe_allow_html=True)
+
+    # 4-Column KPI Summary Cards
+    m_cols = st.columns(4)
+    with m_cols[0]:
+        st.markdown(
+            render_kpi_card(
+                label="Recommended Model",
+                value=advisor_res.top_model.model_name,
+                subtitle=f"{advisor_res.top_model.percentage}% Lifecycle Fit",
+                icon="🧭",
+                accent_color="#2563EB",
+            ),
+            unsafe_allow_html=True,
+        )
+    with m_cols[1]:
+        st.markdown(
+            render_kpi_card(
+                label="COCOMO Labor",
+                value=f"{cocomo_res.effort_pm:.1f} PM",
+                subtitle=f"{cocomo_res.duration_months:.1f} Mos Schedule",
+                icon="💼",
+                accent_color="#0D9488",
+            ),
+            unsafe_allow_html=True,
+        )
+    with m_cols[2]:
+        st.markdown(
+            render_kpi_card(
+                label="Risk Exposure",
+                value=format_currency(risk_summary.total_exposure, compact=True),
+                subtitle=f"{risk_summary.total_risks} Logged Risks",
+                icon="⚠️",
+                accent_color="#EF4444",
+            ),
+            unsafe_allow_html=True,
+        )
+    with m_cols[3]:
+        st.markdown(
+            render_kpi_card(
+                label="Expected NPV (EMV)",
+                value=format_currency(scenario_res.expected_npv, compact=True),
+                subtitle=f"Nominal: {format_currency(biz_res.npv, compact=True)}",
+                icon="💎",
+                accent_color="#10B981" if scenario_res.expected_npv > 0 else "#EF4444",
+            ),
+            unsafe_allow_html=True,
+        )
 
     # Executive Summary Card
+    st.markdown("<div style='height: 14px;'></div>", unsafe_allow_html=True)
     st.markdown("### 📋 Executive Synthesis & Recommendation")
-    st.info(
-        f"**Project '{active.get('name')}':**\n\n"
-        f"• **Recommended Lifecycle:** {advisor_res.top_model.model_name} ({advisor_res.top_model.percentage}% match)\n\n"
-        f"• **Agile Release Schedule:** {agile_plan.sprints_needed} Sprints ({agile_plan.total_weeks} weeks, target {agile_plan.finish_date})\n\n"
-        f"• **Effort Estimates:** COCOMO: {cocomo_res.effort_pm:.1f} PM ({cocomo_res.duration_months:.1f} Mos) | "
-        f"COSMIC: {cosmic_res.total_cfp} CFP ({cosmic_res.total_effort_pm:.1f} PM) | PERT: {pert_res.total_expected:.0f} Hrs\n\n"
-        f"• **Risk Exposure:** ${risk_summary.total_exposure:,.0f} across {risk_summary.total_risks} logged risks\n\n"
-        f"• **Economic Feasibility:** Nominal NPV = ${biz_res.npv:,.2f} | Expected NPV (EMV) = ${scenario_res.expected_npv:,.2f} | "
-        f"RADR Hurdle NPV = ${radr_res.adjusted_npv:,.2f} ({radr_res.adjusted_discount_rate_pct:.1f}%)\n\n"
-        f"• **Software Quality Index:** {qual_res.overall_index:.2f}/5.0 ({qual_res.overall_percentage:.1f}% compliance) - {qual_res.sqa_verdict}"
+    st.markdown(
+        f"""
+        <div class="pc-card" style="border-left: 4px solid var(--pc-primary, #2563EB); font-size: 0.92rem; line-height: 1.6; color: var(--pc-text-main);">
+            <div style="font-weight: 800; font-size: 1.05rem; color: var(--pc-primary-dark, #1E40AF); margin-bottom: 8px;">
+                Executive Brief: {active.get('name')}
+            </div>
+            <div>&bull; <b>Recommended Lifecycle:</b> {advisor_res.top_model.model_name} (<b>{advisor_res.top_model.percentage}%</b> compatibility match)</div>
+            <div>&bull; <b>Agile Release Trajectory:</b> {agile_plan.sprints_needed} Sprints ({agile_plan.total_weeks} weeks, target release <b>{agile_plan.finish_date}</b>)</div>
+            <div>&bull; <b>Effort Sizing Synthesis:</b> COCOMO: <b>{cocomo_res.effort_pm:.1f} PM</b> ({cocomo_res.duration_months:.1f} Mos) | COSMIC: <b>{cosmic_res.total_cfp} CFP</b> ({cosmic_res.total_effort_pm:.1f} PM) | PERT: <b>{pert_res.total_expected:.0f} Hrs</b></div>
+            <div>&bull; <b>Project Risk Exposure:</b> <b>{format_currency(risk_summary.total_exposure, compact=False, precision=0)}</b> across {risk_summary.total_risks} logged risk items</div>
+            <div>&bull; <b>Economic Feasibility:</b> Nominal NPV = <b>{format_currency(biz_res.npv, compact=False, precision=0)}</b> | Expected NPV (EMV) = <b>{format_currency(scenario_res.expected_npv, compact=False, precision=0)}</b> | RADR Hurdle NPV = <b>{format_currency(radr_res.adjusted_npv, compact=False, precision=0)}</b> ({radr_res.adjusted_discount_rate_pct:.1f}%)</div>
+            <div>&bull; <b>McCall Quality Assurance:</b> <b>{qual_res.overall_index:.2f} / 5.0</b> ({qual_res.overall_percentage:.1f}% compliance) &bull; <i>{qual_res.sqa_verdict}</i></div>
+        </div>
+        """,
+        unsafe_allow_html=True,
     )
 
-    # 4-Column High-Level Cards
-    c1, c2, c3, c4 = st.columns(4)
-    with c1:
-        st.metric("Top Lifecycle", advisor_res.top_model.model_name, f"{advisor_res.top_model.percentage}% fit")
-    with c2:
-        st.metric("Estimated Effort", f"{cocomo_res.effort_pm:.1f} PM", f"{cocomo_res.duration_months:.1f} Mos")
-    with c3:
-        st.metric("Total Risk Exposure", f"${risk_summary.total_exposure:,.0f}", f"{risk_summary.total_risks} risks")
-    with c4:
-        st.metric("Expected NPV", f"${scenario_res.expected_npv:,.0f}", f"Nominal: ${biz_res.npv:,.0f}")
-
-    # Section Previews
+    # Section Previews matching PDF structure
     c_sec1, c_sec2 = st.columns(2)
     with c_sec1:
         st.markdown("#### 1. Lifecycle Scoring Breakdown")
@@ -206,8 +284,8 @@ def render_report_page():
                 "ID": r.id,
                 "Category": r.category,
                 "Probability": f"{r.probability:.2f}",
-                "Impact ($)": f"${r.impact_cost:,.0f}",
-                "Exposure ($)": f"${r.exposure:,.0f}",
+                f"Impact ({sym})": format_currency(r.impact_cost, compact=False, precision=0),
+                f"Exposure ({sym})": format_currency(r.exposure, compact=False, precision=0),
                 "Mitigation": r.mitigation,
             }
             for r in risk_summary.ranked_risks[:3]
